@@ -1,0 +1,22 @@
+{
+  "name": "민성이의 가계부",
+  "short_name": "가계부",
+  "description": "민성이의 스마트 가계부 - 베트남/한국 다통화 지원",
+  "start_url": "/minsung-ledger/",
+  "display": "standalone",
+  "background_color": "#0f0f14",
+  "theme_color": "#7c6af7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon_3d_expense_1768214840824.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon_3d_expense_1768214840824.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

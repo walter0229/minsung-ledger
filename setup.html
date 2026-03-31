@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DB 초기화 도구 - 민성이의 가계부</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #0f0f14; color: #f0f0f8; padding: 20px; min-height: 100vh; }
+  h1 { font-size: 20px; margin-bottom: 8px; color: #a78bfa; }
+  .sub { font-size: 13px; color: #9090b0; margin-bottom: 24px; }
+  .card { background: #1e1e2a; border: 1px solid #2e2e3e; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin-bottom: 12px; }
+  pre { background: #0f0f14; border-radius: 8px; padding: 12px; font-size: 12px; color: #60a5fa; overflow-x: auto; white-space: pre-wrap; margin-top: 8px; max-height: 300px; overflow-y: auto; }
+  button { background: linear-gradient(135deg, #7c6af7, #6366f1); border: none; border-radius: 10px; color: white; padding: 13px 24px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 8px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+  .step-num { background: #7c6af7; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .step-text { font-size: 13px; line-height: 1.6; color: #c0c0d8; }
+  .ok { color: #34d399; }
+  .err { color: #f87171; }
+  .warn { color: #fbbf24; }
+  a { color: #7c6af7; }
+</style>
+</head>
+<body>
+<h1>🔧 DB 초기화 도구</h1>
+<p class="sub">민성이의 가계부 - Appwrite 데이터베이스 자동 설정</p>
+
+<div class="card">
+  <h2>📋 초기화 방법</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-text"><a href="https://cloud.appwrite.io" target="_blank">cloud.appwrite.io</a> 에 접속해 로그인하세요</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-text">프로젝트 <strong>69ca6dd30013a519ec48</strong> 를 선택하세요</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-text">아래 버튼을 눌러 DB와 컬렉션을 자동으로 생성하세요</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-text">완료되면 <a href="index.html">← 앱으로 돌아가기</a></div></div>
+</div>
+
+<div class="card">
+  <h2>🚀 자동 초기화 실행</h2>
+  <p style="font-size:13px;color:#9090b0;margin-bottom:12px;">아래 버튼을 누르면 브라우저에서 직접 Appwrite API를 호출해 DB를 생성합니다.</p>
+  <button onclick="runSetup()" id="setupBtn">▶ DB 초기화 시작</button>
+  <pre id="log">버튼을 누르면 초기화를 시작합니다...</pre>
+</div>
+
+<script>
+const ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
+const PROJECT_ID = '69ca6dd30013a519ec48';
+const API_KEY = 'standard_fa6edc6cc9bedfb43dfc66765bd9dba98211f1d96ca6f1320e679d7f345941bafe904d52c172586aa41590db7a00ce4c8d94010546d142a0179f9995390f381daac3fc4a3012e53b1fcb4c5074b8728796483f1903026d202df60fa0c931b749480325bc10ff6c44e553f1a3d7d667eb99c3ec8e05fb169ab9bb2626a126a030';
+const DB_ID = 'ledger-db';
+
+const logEl = document.getElementById('log');
+function log(msg, cls = '') {
+  logEl.innerHTML += `<span class="${cls}">${msg}\n</span>`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function apiReq(method, path, body = null) {
+  const res = await fetch(ENDPOINT + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Appwrite-Project': PROJECT_ID, 'X-Appwrite-Key': API_KEY },
+    body: body ? JSON.stringify(body) : null,
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function createAttr(colId, attr) {
+  const { type, ...body } = attr;
+  const { ok, status, data } = await apiReq('POST', `/databases/${DB_ID}/collections/${colId}/attributes/${type}`, body);
+  if (!ok && status !== 409) { log(`    ❌ ${body.key}: ${data.message}`, 'err'); return false; }
+  log(`    ✅ ${body.key}`, 'ok');
+  return true;
+}
+
+async function runSetup() {
+  const btn = document.getElementById('setupBtn');
+  btn.disabled = true;
+  logEl.innerHTML = '';
+  log('🚀 초기화 시작...\n');
+
+  // 1. DB 생성
+  log('📦 데이터베이스 생성 중...');
+  const dbRes = await apiReq('POST', '/databases', { databaseId: DB_ID, name: '민성이의 가계부' });
+  if (!dbRes.ok && dbRes.status !== 409) { log('❌ DB 생성 실패: ' + dbRes.data.message, 'err'); btn.disabled = false; return; }
+  log('✅ DB: ' + DB_ID + '\n', 'ok');
+
+  // 2. 컬렉션 및 속성 생성
+  const collections = [
+    {
+      id: 'accounts', name: '계좌',
+      attrs: [
+        { type: 'string', key: 'name', size: 100, required: true },
+        { type: 'string', key: 'type', size: 20, required: false, default: 'bank' },
+        { type: 'string', key: 'currency', size: 10, required: false, default: 'VND' },
+        { type: 'string', key: 'currencyIcon', size: 30, required: false },
+        { type: 'string', key: 'bankIcon', size: 30, required: false },
+        { type: 'float', key: 'initialBalance', required: false, min: -999999999999, max: 999999999999 },
+      ]
+    },
+    {
+      id: 'transactions', name: '거래내역',
+      attrs: [
+        { type: 'string', key: 'type', size: 20, required: true },
+        { type: 'string', key: 'date', size: 20, required: true },
+        { type: 'float', key: 'amount', required: true, min: 0, max: 999999999999 },
+        { type: 'string', key: 'memo', size: 255, required: false },
+        { type: 'string', key: 'accountId', size: 50, required: false },
+        { type: 'string', key: 'fromAccountId', size: 50, required: false },
+        { type: 'string', key: 'toAccountId', size: 50, required: false },
+        { type: 'string', key: 'mainCategory', size: 50, required: false },
+        { type: 'string', key: 'subCategory', size: 50, required: false },
+        { type: 'string', key: 'iconKey', size: 50, required: false },
+      ]
+    },
+    {
+      id: 'budgets', name: '예산',
+      attrs: [
+        { type: 'string', key: 'category', size: 50, required: true },
+        { type: 'string', key: 'yearMonth', size: 10, required: true },
+        { type: 'float', key: 'amount', required: true, min: 0, max: 999999999999 },
+      ]
+    },
+    {
+      id: 'app-settings', name: '앱설정',
+      attrs: [
+        { type: 'string', key: 'geminiApiKey', size: 255, required: false },
+        { type: 'string', key: 'theme', size: 30, required: false, default: 'dark' },
+        { type: 'boolean', key: 'reminderEnabled', required: false, default: false },
+        { type: 'string', key: 'reminderTime', size: 10, required: false, default: '09:00' },
+      ]
+    },
+  ];
+
+  for (const col of collections) {
+    log(`📂 컬렉션: ${col.name} (${col.id})`);
+    const colRes = await apiReq('POST', `/databases/${DB_ID}/collections`, {
+      collectionId: col.id,
+      name: col.name,
+      permissions: ['read("any")', 'create("any")', 'update("any")', 'delete("any")'],
+      documentSecurity: false,
+    });
+    if (!colRes.ok && colRes.status !== 409) {
+      log(`  ❌ 컬렉션 생성 실패: ${colRes.data.message}`, 'err');
+      continue;
+    }
+    log(`  ✅ 컬렉션 생성`, 'ok');
+    // 속성 생성 (순차적으로 - Appwrite는 동시 생성 불가)
+    for (const attr of col.attrs) {
+      await createAttr(col.id, attr);
+      await new Promise(r => setTimeout(r, 300)); // API rate limit 방지
+    }
+    log('');
+  }
+
+  log('\n🎉 초기화 완료!', 'ok');
+  log('이제 앱으로 돌아가서 사용하세요!', 'ok');
+  log('\n→ <a href="index.html" style="color:#7c6af7;">앱으로 돌아가기</a>');
+  btn.disabled = false;
+  btn.textContent = '✅ 완료! 앱으로 이동';
+  btn.onclick = () => location.href = 'index.html';
+}
+</script>
+</body>
+</html>
