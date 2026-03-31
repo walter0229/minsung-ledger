@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { state, applyTheme, saveApiSettings, clearAllData, toast, showLoading, parseReceipt } from './utils.js';
+import { state, toast, showLoading, parseReceipt } from './utils.js';
 import { renderHome, renderCalendar, renderStats, renderReport, renderSettings } from './main.js';
 import { store } from './store.js';
 import { openAddModal } from './transactions.js';
@@ -131,3 +131,20 @@ export function applyThemePreset(name) {
 export function openModal(id) { document.getElementById(id)?.classList.add('open'); }
 export function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 export function closeModalOnBg(e, id) { if (e.target === e.currentTarget) closeModal(id); }
+
+export function toggleDarkMode() {
+  const dark = document.getElementById('darkModeToggle').checked;
+  window.applyThemePreset(dark ? 'dark' : 'light');
+}
+
+export function toggleReminder() {
+  const enabled = document.getElementById('reminderToggle').checked;
+  state.settings.reminderEnabled = enabled;
+  window.saveApiSettings();
+}
+
+export function saveReminderTime() {
+  const t = document.getElementById('reminderTime').value;
+  state.settings.reminderTime = t;
+  window.saveApiSettings();
+}
