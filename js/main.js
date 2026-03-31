@@ -1,4 +1,4 @@
-import { loadAll, state, fmtMoney, getCategoryStats, todayStr, getTimeProgress, toast, formatNumberInput, applyTheme, getBudgetStatus, iconImg, calcBalance, findAccount, getCurrencySymbol, showLoading } from './utils.js';
+import { loadAll, state, fmtMoney, getCategoryStats, todayStr, getTimeProgress, toast, formatNumberInput, applyTheme, getBudgetStatus, iconImg, calcBalance, findAccount, getCurrencySymbol, showLoading, fmtDate } from './utils.js';
 import { db } from './db.js';
 import { ICONS, CATEGORIES } from './config.js';
 import { store } from './store.js';

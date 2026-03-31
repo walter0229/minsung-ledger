@@ -1,26 +1,29 @@
 import { db } from './db.js';
 import { state, toast, showLoading, parseReceipt } from './utils.js';
-import { renderHome, renderCalendar, renderStats, renderReport, renderSettings } from './main.js';
 import { store } from './store.js';
-import { openAddModal } from './transactions.js';
 
 // =============================================
 // 민성이의 가계부 - 공통 UI 제어
 // =============================================
 
 export function initUI() {
-  document.getElementById('txDate').value = state.currentMonth + '-01'; // Fallback
-  document.getElementById('budgetMonth').value = state.currentMonth;
+  const elTxDate = document.getElementById('txDate');
+  if(elTxDate) elTxDate.value = state.currentMonth + '-01';
+  const elBudgetMonth = document.getElementById('budgetMonth');
+  if(elBudgetMonth) elBudgetMonth.value = state.currentMonth;
 
   // 설정 값 불러오기
-  if (state.settings.geminiApiKey)
-    document.getElementById('geminiKeyInput').value = state.settings.geminiApiKey;
-  const dark = state.settings.theme === 'dark';
-  document.getElementById('darkModeToggle').checked = dark;
-  if (state.settings.reminderEnabled)
-    document.getElementById('reminderToggle').checked = true;
-  if (state.settings.reminderTime)
-    document.getElementById('reminderTime').value = state.settings.reminderTime;
+  const elGemini = document.getElementById('geminiKeyInput');
+  if (elGemini && state.settings.geminiApiKey) elGemini.value = state.settings.geminiApiKey;
+  
+  const elDark = document.getElementById('darkModeToggle');
+  if(elDark) elDark.checked = state.settings.theme === 'dark';
+  
+  const elReminder = document.getElementById('reminderToggle');
+  if (elReminder && state.settings.reminderEnabled) elReminder.checked = true;
+  
+  const elRemTime = document.getElementById('reminderTime');
+  if (elRemTime && state.settings.reminderTime) elRemTime.value = state.settings.reminderTime;
 
   // 카메라 FAB 표시
   const fab = document.getElementById('fabCamera');
@@ -43,11 +46,11 @@ export function showPage(name) {
   document.getElementById('tab-' + name)?.classList.add('active');
   state.currentTab = name;
 
-  if (name === 'home') renderHome();
-  if (name === 'calendar') renderCalendar();
-  if (name === 'stats') renderStats();
-  if (name === 'report') renderReport();
-  if (name === 'settings') renderSettings();
+  if (name === 'home' && window.renderHome) window.renderHome();
+  if (name === 'calendar' && window.renderCalendar) window.renderCalendar();
+  if (name === 'stats' && window.renderStats) window.renderStats();
+  if (name === 'report' && window.renderReport) window.renderReport();
+  if (name === 'settings' && window.renderSettings) window.renderSettings();
 }
 
 // ─────────────────────────────────────────────
@@ -67,7 +70,7 @@ export async function handleCameraInput(input) {
     try {
       const data = await parseReceipt(base64);
       if (data) {
-        openAddModal();
+        if(window.openAddModal) window.openAddModal();
         if (data.date) document.getElementById('txDate').value = data.date;
         if (data.amount) {
           document.getElementById('txAmount').value = Number(data.amount).toLocaleString();
@@ -77,11 +80,11 @@ export async function handleCameraInput(input) {
         toast('✅ 영수증 분석 완료!', 'success');
       } else {
         toast('⚠️ 영수증 인식 실패. 직접 입력해주세요', 'error');
-        openAddModal();
+        if(window.openAddModal) window.openAddModal();
       }
     } catch(err) {
       toast('❌ ' + err.message, 'error');
-      openAddModal();
+      if(window.openAddModal) window.openAddModal();
     }
   };
   reader.readAsDataURL(file);
