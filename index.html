@@ -451,7 +451,10 @@
         <label class="form-label">초기 잔액</label>
         <input type="text" inputmode="numeric" class="form-input" id="accountBalance" placeholder="0" oninput="formatNumberInput(this)">
       </div>
-      <button class="btn-primary" onclick="saveAccount()">저장</button>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn-primary" onclick="saveAccount()" style="flex:1;">저장</button>
+        <button class="btn-secondary" id="btnDeleteAccount" onclick="executeDeleteAccount()" style="display:none;flex:1;background:var(--red);color:white;border:none;">삭제</button>
+      </div>
     </div>
   </div>
 </div>

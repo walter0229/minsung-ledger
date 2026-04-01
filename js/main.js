@@ -57,7 +57,7 @@ async function renderMonthSummary() {
 }
 
 function renderAccountsList() {
-  const el = document.getElementById('accountsList');
+  const el = document.getElementById('accountsPageList');
   if(!el) return;
   if (!state.accounts.length) {
     el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:13px;">계좌를 추가해주세요</div>';
@@ -67,7 +67,7 @@ function renderAccountsList() {
     const bal = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
     const cur = a.currency || 'VND';
     const bankIcon = a.bankIcon ? `<img src="${ICONS[a.bankIcon]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">` : '';
-    return `<div class="account-card" onclick="void(0)">
+    return `<div class="account-card" onclick="window.openAccountModal('${a.$id}')">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         ${bankIcon}
         <span class="name">${a.name}</span>
@@ -215,6 +215,9 @@ export function openAccountModal(accId = null) {
       store.selectedBankIcon = a.bankIcon || null;
     }
   }
+  const btnDel = document.getElementById('btnDeleteAccount');
+  if (btnDel) btnDel.style.display = accId ? 'block' : 'none';
+
   window.renderCurrencyIconGrid();
   window.renderBankIconGrid();
   openModal('accountModal');
@@ -367,3 +370,10 @@ window.clearAllData = async function() {
   toast('🗑️ 로컬 데이터가 삭제됐어요. 앱을 새로고침해주세요.', 'info');
   setTimeout(() => location.reload(), 1500);
 }
+window.executeDeleteAccount = function() {
+  const id = document.getElementById('editAccountId').value;
+  if(id) {
+    deleteAccount(id);
+    closeModal('accountModal');
+  }
+};
