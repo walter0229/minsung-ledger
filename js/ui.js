@@ -30,8 +30,55 @@ export function initUI() {
   if (elVer) elVer.textContent = 'v' + APP_VERSION;
 
   // 카메라 FAB 표시
-  const fab = document.getElementById('fabCamera');
-  if (fab) fab.classList.add('visible');
+  const fabCam = document.getElementById('fabCamera');
+  if (fabCam) fabCam.classList.add('visible');
+
+  // 입력 FAB 초기화
+  initFabDrag();
+}
+
+function initFabDrag() {
+  const fab = document.getElementById('fabBtn');
+  if (!fab) return;
+  let isDragging = false, startX, startY, initX, initY;
+  let moved = false;
+
+  const onStart = (e) => {
+    isDragging = true; moved = false;
+    const touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX; startY = touch.clientY;
+    const rect = fab.getBoundingClientRect();
+    initX = rect.left; initY = rect.top;
+    fab.style.transition = 'none';
+  };
+  const onMove = (e) => {
+    if (!isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+    const newLeft = Math.max(10, Math.min(window.innerWidth - 66, initX + dx));
+    const newTop = Math.max(10, Math.min(window.innerHeight - 126, initY + dy));
+    fab.style.left = newLeft + 'px';
+    fab.style.top = newTop + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+  };
+  const onEnd = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    fab.style.transition = 'box-shadow 0.2s, transform 0.2s';
+    if (!moved) {
+      if (window.openAddModal) window.openAddModal();
+    }
+  };
+
+  fab.addEventListener('mousedown', onStart);
+  fab.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
 }
 
 export function checkDbStatus() {
