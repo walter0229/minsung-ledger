@@ -74,10 +74,12 @@ export async function getTotalBalanceInBase(accounts, transactions, baseCur = 'V
     }
 
     if (cur === baseCur) {
-      totalInBase += rawBal;
+      if (acc.type === 'loan') totalInBase -= rawBal;
+      else totalInBase += rawBal;
     } else {
       const conv = await convertCurrency(rawBal, cur, baseCur);
-      totalInBase += conv;
+      if (acc.type === 'loan') totalInBase -= conv;
+      else totalInBase += conv;
     }
   }
   

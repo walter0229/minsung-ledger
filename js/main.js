@@ -14,7 +14,6 @@ import { getTotalBalanceInBase } from './sync.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (localStorage.getItem('app-ver') !== APP_VERSION) {
-    localStorage.clear();
     localStorage.setItem('app-ver', APP_VERSION);
     location.reload();
     return;
@@ -58,10 +57,17 @@ async function renderAccountsList() {
   const el = document.getElementById('accountsPageList');
   if(!el) return;
   
-  // 전체 합계 계산 (VND 기준)
-  const totalInVND = await getTotalBalanceInBase(state.accounts, state.transactions, 'VND');
+  // 전체 합계 계산 (VND 기준) - 자산에서 대출 차감
+  let totalInVND = 0;
+  for (const a of state.accounts) {
+    const bal = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
+    const inVND = await convertCurrency(bal, a.currency || 'VND', 'VND');
+    if (a.type === 'loan') totalInVND -= inVND;
+    else totalInVND += inVND;
+  }
+  
   const totalEl = document.getElementById('accountsTotalSum');
-  if(totalEl) totalEl.textContent = `(총 ${fmtMoney(totalInVND, 'VND')})`;
+  if(totalEl) totalEl.textContent = `(순자산 ${fmtMoney(totalInVND, 'VND')})`;
 
   if (!state.accounts.length) {
     el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:13px;">계좌를 추가해주세요</div>';
