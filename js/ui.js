@@ -1,6 +1,7 @@
 import { db } from './db.js';
 import { state, toast, showLoading, parseReceipt } from './utils.js';
 import { store } from './store.js';
+import { APP_VERSION } from './config.js';
 
 // =============================================
 // 민성이의 가계부 - 공통 UI 제어
@@ -24,6 +25,9 @@ export function initUI() {
   
   const elRemTime = document.getElementById('reminderTime');
   if (elRemTime && state.settings.reminderTime) elRemTime.value = state.settings.reminderTime;
+  
+  const elVer = document.getElementById('appVersionDisplay');
+  if (elVer) elVer.textContent = 'v' + APP_VERSION;
 
   // 카메라 FAB 표시
   const fab = document.getElementById('fabCamera');
