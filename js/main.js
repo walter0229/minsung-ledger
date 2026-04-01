@@ -248,6 +248,7 @@ export async function saveAccount() {
     closeModal('accountModal');
     renderHome();
     renderSettings();
+    if(state.currentTab === 'accounts') renderAccountsList();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
   showLoading(false);
 }
@@ -261,6 +262,7 @@ export async function deleteAccount(id) {
     toast('🗑️ 계좌 삭제됐어요');
     renderHome();
     renderSettings();
+    if(state.currentTab === 'accounts') renderAccountsList();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
   showLoading(false);
 }
