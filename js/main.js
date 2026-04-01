@@ -38,19 +38,31 @@ export function renderHome() {
 }
 
 async function renderMonthSummary() {
-  // 이번 달 전체 통합 계산
-  const defaultCur = state.accounts[0]?.currency || 'VND';
+  // 이번 달 전체 통합 계산 (VND 기준)
+  const baseCur = 'VND';
   const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
-  const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
   
-  const monthlyNet = income - expense;
+  let incomeInVND = 0;
+  let expenseInVND = 0;
+
+  for (const t of txs) {
+    const acc = findAccount(t.accountId || t.fromAccountId);
+    const cur = acc?.currency || 'VND';
+    const amt = Number(t.amount) || 0;
+    
+    // 환율 변환 후 합산
+    const inVND = await convertCurrency(amt, cur, baseCur);
+    if (t.type === 'income') incomeInVND += inVND;
+    else if (t.type === 'expense') expenseInVND += inVND;
+  }
+  
+  const monthlyNet = incomeInVND - expenseInVND;
   const balEl = document.getElementById('homeTotalBalance');
-  balEl.textContent = fmtMoney(monthlyNet, defaultCur);
+  balEl.textContent = fmtMoney(monthlyNet, baseCur);
   balEl.className = 'balance ' + (monthlyNet >= 0 ? 'positive' : 'negative');
   
-  document.getElementById('homeIncome').textContent = fmtMoney(income, defaultCur);
-  document.getElementById('homeExpense').textContent = fmtMoney(expense, defaultCur);
+  document.getElementById('homeIncome').textContent = fmtMoney(incomeInVND, baseCur);
+  document.getElementById('homeExpense').textContent = fmtMoney(expenseInVND, baseCur);
 }
 
 async function renderAccountsList() {
