@@ -42,7 +42,7 @@ export function renderStatsScreen() {
   const total = txs.reduce((s, t) => s + Number(t.amount), 0);
   const defaultCur = state.accounts[0]?.currency || 'VND';
 
-  document.getElementById('donutTotal').textContent = fmtMoney(total, defaultCur);
+  document.getElementById('donutTotal').innerHTML = fmtMoney(total, defaultCur);
   document.getElementById('donutLabel').textContent = store.statsType === 'expense' ? '지출 합계' : '수입 합계';
 
   const statData = store.statsType === 'expense' ? stats : Object.entries(

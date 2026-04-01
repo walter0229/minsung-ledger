@@ -33,9 +33,14 @@ export function fmtDate(s) {
 export function fmtMoney(amount, currency = 'VND') {
   const cur = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
   const n = Math.round(Number(amount) || 0);
-  if (currency === 'VND') return cur.symbol + n.toLocaleString('vi-VN');
-  if (currency === 'KRW') return cur.symbol + n.toLocaleString('ko-KR');
-  return cur.symbol + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const symbol = `<span class="money-symbol">${cur.symbol}</span>`;
+  
+  let formatted = '';
+  if (currency === 'VND') formatted = n.toLocaleString('vi-VN');
+  else if (currency === 'KRW') formatted = n.toLocaleString('ko-KR');
+  else formatted = n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  
+  return symbol + formatted;
 }
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();

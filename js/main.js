@@ -58,11 +58,11 @@ async function renderMonthSummary() {
   
   const monthlyNet = incomeInVND - expenseInVND;
   const balEl = document.getElementById('homeTotalBalance');
-  balEl.textContent = fmtMoney(monthlyNet, baseCur);
+  balEl.innerHTML = fmtMoney(monthlyNet, baseCur);
   balEl.className = 'balance ' + (monthlyNet >= 0 ? 'positive' : 'negative');
   
-  document.getElementById('homeIncome').textContent = fmtMoney(incomeInVND, baseCur);
-  document.getElementById('homeExpense').textContent = fmtMoney(expenseInVND, baseCur);
+  document.getElementById('homeIncome').innerHTML = fmtMoney(incomeInVND, baseCur);
+  document.getElementById('homeExpense').innerHTML = fmtMoney(expenseInVND, baseCur);
 }
 
 async function renderAccountsList() {
@@ -83,7 +83,7 @@ async function renderAccountsList() {
   
   const totalEl = document.getElementById('accountsTotalSum');
   if(totalEl) {
-    totalEl.textContent = `(순자산 ${fmtMoney(totalInVND, 'VND')})`;
+    totalEl.innerHTML = `(순자산 ${fmtMoney(totalInVND, 'VND')})`;
     totalEl.style.color = 'var(--yellow)';
   }
 
