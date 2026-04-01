@@ -54,6 +54,7 @@ export function showPage(name) {
   if (name === 'calendar' && window.renderCalendar) window.renderCalendar();
   if (name === 'stats' && window.renderStats) window.renderStats();
   if (name === 'report' && window.renderReport) window.renderReport();
+  if (name === 'accounts' && window.renderAccountsList) window.renderAccountsList();
   if (name === 'settings' && window.renderSettings) window.renderSettings();
 }
 

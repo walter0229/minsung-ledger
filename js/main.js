@@ -1,6 +1,6 @@
 import { loadAll, state, fmtMoney, getCategoryStats, todayStr, getTimeProgress, toast, formatNumberInput, applyTheme, getBudgetStatus, iconImg, calcBalance, findAccount, getCurrencySymbol, showLoading, fmtDate } from './utils.js';
 import { db } from './db.js';
-import { ICONS, CATEGORIES } from './config.js';
+import { ICONS, CATEGORIES, APP_VERSION } from './config.js';
 import { store } from './store.js';
 import { initUI, showPage, checkDbStatus, openCamera, handleCameraInput, applyThemePreset, toggleDarkMode, toggleReminder, saveReminderTime, renderThemeGrid, openModal, closeModal, closeModalOnBg } from './ui.js';
 import { renderCalendarScreen, setStatsPeriod, setStatsType, renderStatsScreen, setReportPeriod, renderReportScreen, calPrevMonth, calNextMonth, showCalDetail } from './stats.js';
@@ -13,6 +13,12 @@ import { getTotalBalanceInBase } from './sync.js';
 // =============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+  if (localStorage.getItem('app-ver') !== APP_VERSION) {
+    localStorage.clear();
+    localStorage.setItem('app-ver', APP_VERSION);
+    location.reload();
+    return;
+  }
   await loadAll();
   initUI();
   renderHome();
