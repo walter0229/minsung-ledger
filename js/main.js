@@ -85,10 +85,12 @@ async function renderAccountsList() {
     if(isLoan) bal = -Math.abs(bal); // 대출은 음수로 강제
 
     const cur = a.currency || 'VND';
-    const bankIcon = a.bankIcon ? `<img src="${ICONS[a.bankIcon]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">` : '';
+    const iconKey = a.bankIcon || a.currencyIcon || cur.toLowerCase();
+    const displayIcon = `<img src="${ICONS[iconKey]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">`;
+    
     return `<div class="account-card" onclick="window.openAccountModal('${a.$id}')">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-        ${bankIcon}
+        ${displayIcon}
         <span class="name">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>
       </div>
       <div class="bal ${bal >= 0 ? 'positive' : 'negative'}">${fmtMoney(bal, cur)}</div>
