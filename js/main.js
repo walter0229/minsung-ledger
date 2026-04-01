@@ -6,7 +6,7 @@ import { initUI, showPage, checkDbStatus, openCamera, handleCameraInput, applyTh
 import { renderCalendarScreen, setStatsPeriod, setStatsType, renderStatsScreen, setReportPeriod, renderReportScreen, calPrevMonth, calNextMonth, showCalDetail } from './stats.js';
 import { openAddModal, setTxType, onMainCatChange, selectTxAccount, selectTransferFrom, selectTransferTo, selectTxIcon, saveTx, showTxDetail, deleteTx, doSearch, renderTxItem } from './transactions.js';
 import { openBudgetModal, renderBudgetInputList, saveBudgets } from './budget.js';
-import { getTotalBalanceInBase } from './sync.js';
+import { getTotalBalanceInBase, convertCurrency } from './sync.js';
 
 // =============================================
 // 민성이의 가계부 - 진입점 & 전역 이벤트 바인딩
