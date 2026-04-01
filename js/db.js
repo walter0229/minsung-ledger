@@ -20,6 +20,7 @@ class AppwriteDB {
         await this.account.createAnonymousSession();
       } catch (e) {
         console.warn('세션 생성 실패:', e.message);
+        throw e; // 상위로 에러를 던져야 거짓 성공 로그를 막을 수 있습니다.
       }
     }
   }

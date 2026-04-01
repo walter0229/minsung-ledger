@@ -2,7 +2,7 @@
 // 민성이의 가계부 - 설정 파일
 // =============================================
 
-export const APPWRITE_ENDPOINT = 'https://cloud.appwrite.io/v1';
+export const APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
 export const APPWRITE_PROJECT_ID = '69ca6dd30013a519ec48';
 export const DB_ID = 'ledger-db';
 
@@ -153,4 +153,4 @@ export const ACCOUNT_TYPES = [
 export const GEMINI_MODEL = 'gemini-3.0-flash';
 
 // 앱 버전
-export const APP_VERSION = '1.001';
+export const APP_VERSION = '1.002';
