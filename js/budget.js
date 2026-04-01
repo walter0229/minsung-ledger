@@ -1,7 +1,7 @@
 import { CATEGORIES } from './config.js';
 import { db } from './db.js';
 import { state, getCurrencySymbol, formatNumberInput, toast, showLoading } from './utils.js';
-import { closeModal, renderStats } from './main.js';
+
 
 // =============================================
 // 민성이의 가계부 - 예산 설정 (소분류 지원)
@@ -82,7 +82,7 @@ export async function saveBudgets() {
     }
     
     toast('✅ 소분류가 적용된 예산이 저장됐어요!');
-    closeModal('budgetModal');
+    if(window.closeModal) window.closeModal('budgetModal');
     // 통계 및 예산 막대 갱신
     if(typeof window.renderStats === 'function') window.renderStats();
   } catch(e) { 
