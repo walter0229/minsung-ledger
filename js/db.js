@@ -187,24 +187,33 @@ class DB {
   }
 
   async createAccount(data) {
+    let saved;
     if (this.online) {
-      try { return await this.aw.createDoc(COL.ACCOUNTS, data); }
+      try { saved = await this.aw.createDoc(COL.ACCOUNTS, data); }
       catch { this.online = false; }
     }
-    return this.local.create(COL.ACCOUNTS, data);
+    if (!saved) {
+      saved = this.local.create(COL.ACCOUNTS, data);
+    } else {
+      // 온라인 생성 성공 시 로컬에도 해당 ID로 미러링 생성
+      this.local.create(COL.ACCOUNTS, data, saved.$id);
+    }
+    return saved;
   }
 
   async updateAccount(id, data) {
+    let updated;
     if (this.online) {
-      try { return await this.aw.updateDoc(COL.ACCOUNTS, id, data); }
+      try { updated = await this.aw.updateDoc(COL.ACCOUNTS, id, data); }
       catch { this.online = false; }
     }
-    return this.local.update(COL.ACCOUNTS, id, data);
+    const localUpdated = this.local.update(COL.ACCOUNTS, id, data);
+    return updated || localUpdated;
   }
 
   async deleteAccount(id) {
     if (this.online) {
-      try { return await this.aw.deleteDoc(COL.ACCOUNTS, id); }
+      try { await this.aw.deleteDoc(COL.ACCOUNTS, id); }
       catch { this.online = false; }
     }
     this.local.delete(COL.ACCOUNTS, id);

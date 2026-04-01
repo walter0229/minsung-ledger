@@ -230,9 +230,20 @@ export function renderSettings() {
 export function openAccountModal(accId = null) {
   document.getElementById('editAccountId').value = accId || '';
   document.getElementById('accountModalTitle').textContent = accId ? '계좌 수정' : '계좌 추가';
+  
+  // 기본 필드 초기화
   document.getElementById('accountOrder').value = 0;
-  window.renderCurrencyIconGrid();
-  window.renderBankIconGrid();
+  document.getElementById('accountName').value = '';
+  document.getElementById('accountType').value = 'bank';
+  document.getElementById('accountCurrency').value = 'VND';
+  document.getElementById('accountBalance').value = '';
+  if (document.getElementById('accountBalance').dataset) {
+    document.getElementById('accountBalance').dataset.raw = '';
+  }
+  
+  // 글로벌 아이콘 선택 상태 초기화
+  store.selectedCurrencyIcon = 'vnd';
+  store.selectedBankIcon = null;
 
   if (accId) {
     const a = state.accounts.find(ac => ac.$id === accId);
@@ -241,11 +252,15 @@ export function openAccountModal(accId = null) {
       document.getElementById('accountType').value = a.type || 'bank';
       document.getElementById('accountCurrency').value = a.currency || 'VND';
       document.getElementById('accountBalance').value = a.initialBalance ? Number(a.initialBalance).toLocaleString() : '';
+      if (document.getElementById('accountBalance').dataset) {
+        document.getElementById('accountBalance').dataset.raw = String(a.initialBalance || 0);
+      }
       document.getElementById('accountOrder').value = a.order || 0;
       store.selectedCurrencyIcon = a.currencyIcon || 'vnd';
       store.selectedBankIcon = a.bankIcon || null;
     }
   }
+  
   const btnDel = document.getElementById('btnDeleteAccount');
   if (btnDel) btnDel.style.display = accId ? 'block' : 'none';
 
