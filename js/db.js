@@ -6,74 +6,46 @@ import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DB_ID, COL } from './config.js'
 
 class AppwriteDB {
   constructor() {
-    this.endpoint = APPWRITE_ENDPOINT;
-    this.projectId = APPWRITE_PROJECT_ID;
-    this.apiKey = null; // 클라이언트 사이드 - 익명 세션 사용
+    this.client = new window.Appwrite.Client();
+    this.client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
+    this.account = new window.Appwrite.Account(this.client);
+    this.databases = new window.Appwrite.Databases(this.client);
   }
 
-  async headers(extra = {}) {
-    return {
-      'Content-Type': 'application/json',
-      'X-Appwrite-Project': this.projectId,
-      ...extra,
-    };
-  }
-
-  async req(method, path, body = null) {
-    const opts = {
-      method,
-      headers: await this.headers(),
-    };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(this.endpoint + path, opts);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: res.statusText }));
-      throw new Error(err.message || 'Appwrite error');
-    }
-    return res.json();
-  }
-
-  // ── 세션 (익명 로그인) ──────────────────────
   async ensureSession() {
     try {
-      await this.req('GET', '/account');
+      await this.account.get();
     } catch {
       try {
-        await this.req('POST', '/account/sessions/anonymous');
+        await this.account.createAnonymousSession();
       } catch (e) {
         console.warn('세션 생성 실패:', e.message);
       }
     }
   }
 
-  // ── Documents CRUD ──────────────────────────
   async listDocs(colId, queries = []) {
-    let qs = queries.map(q => `queries[]=${encodeURIComponent(q)}`).join('&');
-    return this.req('GET', `/databases/${DB_ID}/collections/${colId}/documents${qs ? '?' + qs : ''}`);
+    return this.databases.listDocuments(DB_ID, colId, queries);
   }
 
   async getDoc(colId, docId) {
-    return this.req('GET', `/databases/${DB_ID}/collections/${colId}/documents/${docId}`);
+    return this.databases.getDocument(DB_ID, colId, docId);
   }
 
   async createDoc(colId, data, docId = null) {
-    const id = docId || this.generateId();
-    return this.req('POST', `/databases/${DB_ID}/collections/${colId}/documents`, {
-      documentId: id,
-      data,
-    });
+    // 시스템 키 필터링
+    const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
+    const id = docId || window.Appwrite.ID.unique();
+    return this.databases.createDocument(DB_ID, colId, id, cleanData);
   }
 
   async updateDoc(colId, docId, data) {
-    return this.req('PATCH', `/databases/${DB_ID}/collections/${colId}/documents/${docId}`, { data });
+    const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
+    return this.databases.updateDocument(DB_ID, colId, docId, cleanData);
   }
 
   async deleteDoc(colId, docId) {
-    return this.req('DELETE', `/databases/${DB_ID}/collections/${colId}/documents/${docId}`);
-  }
-
-  generateId() {
-    return 'id' + Date.now() + Math.random().toString(36).substr(2, 9);
+    return this.databases.deleteDocument(DB_ID, colId, docId);
   }
 }
 
@@ -163,8 +135,8 @@ class DB {
     if (this.online) {
       try {
         const res = await this.aw.listDocs(COL.TRANSACTIONS, [
-          'Query.orderDesc("date")',
-          'Query.limit(500)',
+          window.Appwrite.Query.orderDesc("date"),
+          window.Appwrite.Query.limit(500),
           ...queries
         ]);
         return res.documents || [];
