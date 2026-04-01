@@ -139,8 +139,8 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .form-select option { background: var(--bg2); }
 
 .amount-input-wrap { position: relative; }
-.amount-symbol { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 16px; font-weight: 700; }
-.money-symbol { color: var(--text3); font-weight: 400; margin-right: 1px; font-size: 0.9em; }
+.amount-symbol { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 16px; font-weight: 700; }
+.money-symbol { color: #9ca3af; font-weight: 400; margin-right: 1px; font-size: 0.9em; }
 .amount-input-wrap .form-input { padding-left: 36px; font-size: 20px; font-weight: 700; }
 
 /* ── 카테고리 선택 드롭다운 ─────────────── */

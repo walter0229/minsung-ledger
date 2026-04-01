@@ -33,12 +33,14 @@ export function fmtDate(s) {
 export function fmtMoney(amount, currency = 'VND') {
   const cur = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
   const n = Math.round(Number(amount) || 0);
-  const symbol = `<span class="money-symbol">${cur.symbol}</span>`;
+  const isNeg = n < 0;
+  const absN = Math.abs(n);
+  const symbol = `<span class="money-symbol">${cur.symbol}${isNeg ? '-' : ''}</span>`;
   
   let formatted = '';
-  if (currency === 'VND') formatted = n.toLocaleString('vi-VN');
-  else if (currency === 'KRW') formatted = n.toLocaleString('ko-KR');
-  else formatted = n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  if (currency === 'VND') formatted = absN.toLocaleString('vi-VN');
+  else if (currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
+  else formatted = absN.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   
   return symbol + formatted;
 }

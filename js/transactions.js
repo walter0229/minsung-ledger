@@ -13,7 +13,7 @@ export function renderTxItem(t) {
   const iconKey = t.iconKey || (t.type === 'income' ? 'income' : t.type === 'transfer' ? 'transfer' : 'etc');
   const acc = findAccount(t.accountId || t.fromAccountId);
   const cur = acc?.currency || 'VND';
-  const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : '-';
+  const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
   const cls = t.type;
   return `<div class="tx-item" onclick="window.showTxDetail('${t.$id}')">
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
@@ -21,7 +21,7 @@ export function renderTxItem(t) {
       <div class="tx-name">${t.memo || t.subCategory || t.mainCategory || '내역 없음'}</div>
       <div class="tx-cat">${t.mainCategory || ''} ${t.subCategory ? '> ' + t.subCategory : ''}</div>
     </div>
-    <div class="tx-amount ${cls}">${sign}${fmtMoney(t.amount, cur)}</div>
+    <div class="tx-amount ${cls}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
   </div>`;
 }
 
@@ -219,7 +219,7 @@ export function showTxDetail(txId) {
         ${iconImg(t.iconKey || 'etc', 36)}
       </div>
       <div style="font-size:24px;font-weight:900;color:${t.type==='income'?'var(--income)':t.type==='transfer'?'var(--transfer)':'var(--expense)'}">
-        ${t.type==='income'?'+':t.type==='transfer'?'↔':'-'}${fmtMoney(t.amount, cur)}
+        ${t.type==='income'?'<span class="money-symbol">+</span>':t.type==='transfer'?'<span class="money-symbol">↔</span>':''}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}
       </div>
       <div style="font-size:14px;color:var(--text2);margin-top:4px;">${t.memo || '-'}</div>
     </div>
@@ -285,13 +285,13 @@ export function doSearch() {
   el.innerHTML = `<div style="font-size:12px;color:var(--text2);margin:8px 0;padding:8px 0;border-bottom:1px solid var(--border);">
     검색 결과: ${results.length}건 / 합계: <span style="font-weight:700;color:${total>=0?'var(--income)':'var(--expense)'}">${fmtMoney(total, defaultCur)}</span>
   </div>` + results.map(t => {
-    const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '↔' : '-';
+    const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
     const acc = findAccount(t.accountId || t.fromAccountId);
     const cur = acc?.currency || defaultCur;
     return `<div class="report-tx-item" onclick="window.showTxDetail('${t.$id}')">
       <div class="report-tx-date">${fmtDate(t.date?.slice(0,10))}</div>
       <div class="report-tx-name">${t.memo || t.subCategory || t.mainCategory || '-'}</div>
-      <div class="report-tx-amount" style="color:${t.type==='income'?'var(--income)':t.type==='transfer'?'var(--transfer)':'var(--expense)'}">${sign}${fmtMoney(t.amount, cur)}</div>
+      <div class="report-tx-amount" style="color:${t.type==='income'?'var(--income)':t.type==='transfer'?'var(--transfer)':'var(--expense)'}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
     </div>`;
   }).join('');
 }
