@@ -32,10 +32,10 @@ export function fmtDate(s) {
 }
 export function fmtMoney(amount, currency = 'VND') {
   const cur = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
-  const n = Number(amount) || 0;
+  const n = Math.round(Number(amount) || 0);
   if (currency === 'VND') return cur.symbol + n.toLocaleString('vi-VN');
   if (currency === 'KRW') return cur.symbol + n.toLocaleString('ko-KR');
-  return cur.symbol + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return cur.symbol + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -52,6 +52,7 @@ export function getWeekNumber(d) {
 export async function loadAll() {
   showLoading(true);
   try {
+    await db.ready; // DB 초기화 완료까지 대기
     const [txs, accs, buds] = await Promise.all([
       db.listTransactions(),
       db.listAccounts(),

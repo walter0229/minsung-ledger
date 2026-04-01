@@ -192,7 +192,7 @@
       <div class="header-row">
         <div style="display:flex;align-items:center;gap:8px;">
           <h1>🏦 계좌 관리</h1>
-          <span id="accountsTotalSum" style="font-size:14px;color:var(--text3);font-weight:normal;margin-top:4px;"></span>
+          <span id="accountsTotalSum" style="font-size:14px;color:#facc15;font-weight:700;margin-top:4px;"></span>
         </div>
         <button onclick="openAccountModal()" style="background:linear-gradient(135deg,var(--accent),#6366f1);border:none;border-radius:20px;color:white;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">+ 추가</button>
       </div>
@@ -449,6 +449,10 @@
       <div class="form-group">
         <label class="form-label">은행 아이콘</label>
         <div class="icon-grid" id="bankIconGrid" style="grid-template-columns:repeat(6,1fr);"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">정렬 순서 (낮을수록 위쪽)</label>
+        <input type="number" class="form-input" id="accountOrder" placeholder="0">
       </div>
       <div class="form-group">
         <label class="form-label">초기 잔액</label>

@@ -91,6 +91,9 @@ class DB {
     this.aw = new AppwriteDB();
     this.local = new LocalDB();
     this.online = false;
+    this.ready = new Promise((resolve) => {
+      this._resolveReady = resolve;
+    });
     this.init();
   }
 
@@ -103,6 +106,8 @@ class DB {
     } catch (e) {
       console.warn('⚠️ 오프라인 모드:', e.message);
       this.online = false;
+    } finally {
+      this._resolveReady();
     }
   }
 

@@ -57,6 +57,9 @@ async function renderAccountsList() {
   const el = document.getElementById('accountsPageList');
   if(!el) return;
   
+  // 정렬 순서 반영
+  state.accounts.sort((a,b) => (Number(a.order)||0) - (Number(b.order)||0));
+  
   // 전체 합계 계산 (VND 기준) - 자산에서 대출 차감
   let totalInVND = 0;
   for (const a of state.accounts) {
@@ -67,7 +70,10 @@ async function renderAccountsList() {
   }
   
   const totalEl = document.getElementById('accountsTotalSum');
-  if(totalEl) totalEl.textContent = `(순자산 ${fmtMoney(totalInVND, 'VND')})`;
+  if(totalEl) {
+    totalEl.textContent = `(순자산 ${fmtMoney(totalInVND, 'VND')})`;
+    totalEl.style.color = 'var(--yellow)';
+  }
 
   if (!state.accounts.length) {
     el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:13px;">계좌를 추가해주세요</div>';
@@ -210,12 +216,9 @@ export function renderSettings() {
 export function openAccountModal(accId = null) {
   document.getElementById('editAccountId').value = accId || '';
   document.getElementById('accountModalTitle').textContent = accId ? '계좌 수정' : '계좌 추가';
-  document.getElementById('accountName').value = '';
-  document.getElementById('accountType').value = 'bank';
-  document.getElementById('accountCurrency').value = 'VND';
-  document.getElementById('accountBalance').value = '';
-  store.selectedCurrencyIcon = 'vnd';
-  store.selectedBankIcon = null;
+  document.getElementById('accountOrder').value = 0;
+  window.renderCurrencyIconGrid();
+  window.renderBankIconGrid();
 
   if (accId) {
     const a = state.accounts.find(ac => ac.$id === accId);
@@ -224,6 +227,7 @@ export function openAccountModal(accId = null) {
       document.getElementById('accountType').value = a.type || 'bank';
       document.getElementById('accountCurrency').value = a.currency || 'VND';
       document.getElementById('accountBalance').value = a.initialBalance ? Number(a.initialBalance).toLocaleString() : '';
+      document.getElementById('accountOrder').value = a.order || 0;
       store.selectedCurrencyIcon = a.currencyIcon || 'vnd';
       store.selectedBankIcon = a.bankIcon || null;
     }
@@ -247,6 +251,7 @@ export async function saveAccount() {
     currencyIcon: store.selectedCurrencyIcon,
     bankIcon: store.selectedBankIcon,
     initialBalance: Number(rawBal) || 0,
+    order: parseInt(document.getElementById('accountOrder').value) || 0
   };
   showLoading(true);
   try {
