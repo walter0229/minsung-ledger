@@ -45,32 +45,39 @@ async function renderMonthSummary() {
   const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
   const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
   
-  // 환율 연동된 통합 자산 표시
-  const totalBalance = await getTotalBalanceInBase(state.accounts, state.transactions, defaultCur);
-
+  const monthlyNet = income - expense;
   const balEl = document.getElementById('homeTotalBalance');
-  balEl.textContent = fmtMoney(totalBalance, defaultCur);
-  balEl.className = 'balance ' + (totalBalance >= 0 ? 'positive' : 'negative');
+  balEl.textContent = fmtMoney(monthlyNet, defaultCur);
+  balEl.className = 'balance ' + (monthlyNet >= 0 ? 'positive' : 'negative');
   
   document.getElementById('homeIncome').textContent = fmtMoney(income, defaultCur);
   document.getElementById('homeExpense').textContent = fmtMoney(expense, defaultCur);
 }
 
-function renderAccountsList() {
+async function renderAccountsList() {
   const el = document.getElementById('accountsPageList');
   if(!el) return;
+  
+  // 전체 합계 계산 (VND 기준)
+  const totalInVND = await getTotalBalanceInBase(state.accounts, state.transactions, 'VND');
+  const totalEl = document.getElementById('accountsTotalSum');
+  if(totalEl) totalEl.textContent = `(총 ${fmtMoney(totalInVND, 'VND')})`;
+
   if (!state.accounts.length) {
     el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:13px;">계좌를 추가해주세요</div>';
     return;
   }
   el.innerHTML = state.accounts.map(a => {
-    const bal = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
+    let bal = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
+    const isLoan = a.type === 'loan';
+    if(isLoan) bal = -Math.abs(bal); // 대출은 음수로 강제
+
     const cur = a.currency || 'VND';
     const bankIcon = a.bankIcon ? `<img src="${ICONS[a.bankIcon]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">` : '';
     return `<div class="account-card" onclick="window.openAccountModal('${a.$id}')">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         ${bankIcon}
-        <span class="name">${a.name}</span>
+        <span class="name">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>
       </div>
       <div class="bal ${bal >= 0 ? 'positive' : 'negative'}">${fmtMoney(bal, cur)}</div>
     </div>`;
