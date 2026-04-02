@@ -39,6 +39,8 @@ export function openAddModal(txId = null) {
   document.getElementById('txDate').value = state.currentMonth ? (state.currentMonth + '-01') : ''; // fallback
   document.getElementById('txAmount').value = '';
   document.getElementById('txMemo').value = '';
+  
+  renderMainCategories(); // 대분류 목록 채우기
   document.getElementById('mainCatSelect').value = '';
   document.getElementById('subCatSelect').innerHTML = '<option value="">소분류 선택</option>';
 
@@ -102,6 +104,14 @@ export function onMainCatChange() {
       sub.appendChild(o);
     });
   }
+}
+
+export function renderMainCategories() {
+  const el = document.getElementById('mainCatSelect');
+  if(!el) return;
+  const cats = Object.keys(CATEGORIES);
+  el.innerHTML = '<option value="">대분류 선택</option>' + 
+    cats.map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
 export function renderTxAccountChips() {
