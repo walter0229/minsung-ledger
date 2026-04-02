@@ -2,6 +2,7 @@ import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimePro
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
+import { fetchExchangeRates, convertCurrency } from './sync.js';
 
 // =============================================
 // 민성이의 가계부 - 통계 및 차트 전담
@@ -35,19 +36,40 @@ function getStatsTxs() {
   });
 }
 
-export function renderStatsScreen() {
+export async function renderStatsScreen() {
   const txs = getStatsTxs();
-  const stats = getCategoryStats(txs.filter(t => t.type === 'expense'));
-  const incomeTxs = txs.filter(t => t.type === 'income');
-  const total = txs.reduce((s, t) => s + Number(t.amount), 0);
-  const defaultCur = state.accounts[0]?.currency || 'VND';
+  const baseCur = 'VND';
+  
+  // 모든 거래 내역에 대해 환율을 적용하여 VND 금액(vndAmt) 산출
+  for (const t of txs) {
+    const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+    const cur = acc?.currency || 'VND';
+    t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
+  }
 
-  document.getElementById('donutTotal').innerHTML = fmtMoney(total, defaultCur);
+  // 지출 통계 그룹화 로직 (환산된 금액 기준)
+  const statsMap = {};
+  txs.filter(t => t.type === 'expense').forEach(t => {
+    const k = t.mainCategory || '기타';
+    statsMap[k] = (statsMap[k] || 0) + t.vndAmt;
+  });
+  const expenseStats = Object.entries(statsMap).sort((a,b) => b[1]-a[1]);
+
+  // 수입 통계 그룹화 로직 (환산된 금액 기준)
+  const incomeMap = {};
+  txs.filter(t => t.type === 'income').forEach(t => {
+    const k = t.mainCategory || '수입';
+    incomeMap[k] = (incomeMap[k] || 0) + t.vndAmt;
+  });
+  const incomeStats = Object.entries(incomeMap).sort((a,b) => b[1]-a[1]);
+
+  const total = txs.reduce((s, t) => s + (t.vndAmt || 0), 0);
+  const displayCur = 'VND';
+
+  document.getElementById('donutTotal').innerHTML = fmtMoney(total, displayCur);
   document.getElementById('donutLabel').textContent = store.statsType === 'expense' ? '지출 합계' : '수입 합계';
 
-  const statData = store.statsType === 'expense' ? stats : Object.entries(
-    incomeTxs.reduce((m, t) => { m[t.mainCategory || '수입'] = (m[t.mainCategory || '수입'] || 0) + Number(t.amount); return m; }, {})
-  );
+  const statData = store.statsType === 'expense' ? expenseStats : incomeStats;
 
   const colors = ['#7c6af7','#f87171','#34d399','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#38bdf8','#facc15','#818cf8'];
   const labels = statData.map(([k]) => k);
@@ -66,7 +88,7 @@ export function renderStatsScreen() {
       },
       options: {
         cutout: '70%', plugins: { legend: { display: false }, tooltip: {
-          callbacks: { label: ctx => ` ${ctx.label}: ${fmtMoney(ctx.raw, defaultCur)}` }
+          callbacks: { label: ctx => ` ${ctx.label}: ${fmtMoney(ctx.raw, displayCur)}` }
         }},
         animation: { animateScale: true }
       }
@@ -79,34 +101,54 @@ export function renderStatsScreen() {
       <div class="legend-dot" style="background:${colors[i % colors.length]}"></div>
       <div class="legend-name">${cat}</div>
       <div class="legend-pct">${total > 0 ? (amt/total*100).toFixed(1) : 0}%</div>
-      <div class="legend-amount">${fmtMoney(amt, defaultCur)}</div>
+      <div class="legend-amount">${fmtMoney(amt, displayCur)}</div>
     </div>`).join('');
 
   // 예산 바
-  renderBudgetBars();
+  await renderBudgetBars();
 }
 
-function renderBudgetBars() {
+async function renderBudgetBars() {
   const el = document.getElementById('budgetBars');
-  const status = getBudgetStatus(state.currentMonth);
-  if (!status.length) {
+  const month = state.currentMonth;
+  const budgets = state.budgets.filter(b => b.yearMonth === month);
+  const txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+  
+  if (!budgets.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">예산을 설정해주세요</div>';
     return;
   }
-  const defaultCur = state.accounts[0]?.currency || 'VND';
   
-  // 소분류까지 포함된 예산 목록을 렌더링하기 좋게 정렬
+  const baseCur = 'VND';
+  const status = [];
+
+  for (const b of budgets) {
+    let usedInVnd = 0;
+    const filterTxs = b.subCategory 
+      ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
+      : txs.filter(t => t.mainCategory === b.category);
+
+    for (const t of filterTxs) {
+      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+      const cur = acc?.currency || 'VND';
+      usedInVnd += await convertCurrency(Number(t.amount), cur, baseCur);
+    }
+    
+    status.push({ ...b, usedVnd: usedInVnd, percent: b.amount > 0 ? (usedInVnd / b.amount * 100).toFixed(1) : 0 });
+  }
+
   el.innerHTML = status.map(b => {
     const pct = Math.min(Number(b.percent), 100);
-    const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok';
-    const title = b.subCategory ? `${b.category} > ${b.subCategory}` : b.category;
-    
-    return `<div class="budget-bar-wrap">
-      <div class="budget-bar-label">
+    const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
+    return `
+    <div class="budget-item">
+      <div class="budget-info">
         <span>${title}</span>
-        <span style="color:var(--text2)">${fmtMoney(b.used, defaultCur)} / ${fmtMoney(b.amount, defaultCur)} (${b.percent}%)</span>
+        <span>${fmtMoney(b.usedVnd, baseCur)} / ${fmtMoney(b.amount, baseCur)}</span>
       </div>
-      <div class="budget-bar-bg"><div class="budget-bar-fill ${cls}" style="width:${pct}%"></div></div>
+      <div class="progress-bg">
+        <div class="progress-bar" style="width:${pct}%; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}"></div>
+      </div>
     </div>`;
   }).join('');
 }
