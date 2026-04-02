@@ -402,6 +402,8 @@ window.closeModal = closeModal;
 window.closeModalOnBg = closeModalOnBg;
 window.renderStats = renderStatsScreen;
 window.renderReport = renderReportScreen;
+window.openBudgetModal = openBudgetModal;
+window.saveBudgets = saveBudgets;
 
 window.saveApiSettings = async function() {
   const key = document.getElementById('geminiKeyInput')?.value?.trim() || state.settings.geminiApiKey;

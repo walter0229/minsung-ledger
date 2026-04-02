@@ -1,6 +1,7 @@
 import { CATEGORIES } from './config.js';
 import { db } from './db.js';
 import { state, getCurrencySymbol, formatNumberInput, toast, showLoading } from './utils.js';
+import { openModal, closeModal } from './ui.js';
 
 
 // =============================================
@@ -10,6 +11,7 @@ import { state, getCurrencySymbol, formatNumberInput, toast, showLoading } from 
 export function openBudgetModal() {
   document.getElementById('budgetMonth').value = state.currentMonth;
   renderBudgetInputList();
+  openModal('budgetModal');
 }
 
 export function renderBudgetInputList() {
