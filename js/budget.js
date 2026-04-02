@@ -16,8 +16,9 @@ export function openBudgetModal() {
 
 export function renderBudgetInputList() {
   const el = document.getElementById('budgetInputList');
-  const ym = document.getElementById('budgetMonth').value || state.currentMonth;
-  const existing = state.budgets.filter(b => b.yearMonth === ym);
+  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
+  const ym = (rawYm || '').replace(/\./g, '-'); // 🚀 날짜 포맷 강제 표준화
+  const existing = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
   const defaultCur = state.accounts[0]?.currency || 'VND';
   const sym = getCurrencySymbol(defaultCur);
 
@@ -80,7 +81,8 @@ export function updateCategoryTotal(mainCat) {
 }
 
 export async function saveBudgets() {
-  const ym = document.getElementById('budgetMonth').value || state.currentMonth;
+  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
+  const ym = (rawYm || '').replace(/\./g, '-');
   
   showLoading(true);
   try {
