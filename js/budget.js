@@ -21,39 +21,62 @@ export function renderBudgetInputList() {
   const defaultCur = state.accounts[0]?.currency || 'VND';
   const sym = getCurrencySymbol(defaultCur);
 
-  // 대분류별로 소분류 렌더링 (아코디언 혹은 리스트)
   let html = '';
   for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
-    // 해당 대분류의 총 예산액 (소분류 합산용 또는 메인 단독)
-    const mainBudget = existing.find(e => e.category === mainCat && !e.subCategory);
-    const mainVal = mainBudget ? Number(mainBudget.amount).toLocaleString() : '';
+    // 소분류 합계 계산
+    const subs = existing.filter(e => e.category === mainCat && e.subCategory);
+    const subTotal = subs.reduce((s, b) => s + Number(b.amount), 0);
+    
+    // 대분류 예산 (직접 입력한 값이 있으면 우선, 없으면 소분류 합계 프리뷰)
+    const mainRecord = existing.find(e => e.category === mainCat && !e.subCategory);
+    const mainVal = mainRecord ? Number(mainRecord.amount).toLocaleString() : subTotal > 0 ? subTotal.toLocaleString() : '';
 
-    html += `<div class="budget-main-group" style="margin-bottom:16px; border:1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden;">`;
-    html += `  <div style="background:var(--bg3); padding:10px 14px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
-                 ${mainCat} 
-                 <div class="amount-input-wrap" style="width: 120px;">
-                    <span class="amount-symbol" style="font-size:12px;">${sym}</span>
-                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" placeholder="대분류 전체예산" oninput="window.formatNumberInput(this)" style="padding-left:26px; height:28px; font-size:12px;">
+    html += `<div class="budget-main-group" data-category="${mainCat}" style="margin-bottom:12px; border:1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden;">`;
+    html += `  <div style="background:var(--bg3); padding:8px 12px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
+                 <span style="font-size:14px;">${mainCat} <small style="font-weight:normal; color:var(--text2); font-size:11px;">(계산된 합계)</small></span> 
+                 <div class="amount-input-wrap" style="width: 130px;">
+                    <span class="amount-symbol" style="font-size:11px;">${sym}</span>
+                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" placeholder="직접 입력 시 우선" oninput="window.formatNumberInput(this)" style="padding-left:24px; height:28px; font-size:13px; text-align:right;">
                  </div>
                </div>`;
-    html += `  <div style="padding:10px 14px; background:var(--card); display:flex; flex-direction:column; gap:8px;">`;
+    html += `  <div style="padding:8px 12px; background:var(--card); display:flex; flex-direction:column; gap:6px;">`;
 
     for (const sub of subCats) {
       const b = existing.find(e => e.category === mainCat && e.subCategory === sub.name);
       const val = b ? Number(b.amount).toLocaleString() : '';
-      html += `    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center;">
-                     <label class="form-label" style="margin-bottom:0; width:90px; font-size:13px; color:var(--text2);">↳ ${sub.name}</label>
+      html += `    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+                     <label class="form-label" style="margin-bottom:0; width:80px; font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">↳ ${sub.name}</label>
                      <div class="amount-input-wrap" style="flex:1;">
-                       <span class="amount-symbol" style="font-size:12px;">${sym}</span>
-                       <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-sub-${sub.id}" value="${val}" placeholder="0" data-main="${mainCat}" data-sub="${sub.name}" oninput="window.formatNumberInput(this)" style="padding-left:26px; height:32px; font-size:13px;">
+                       <span class="amount-symbol" style="font-size:11px;">${sym}</span>
+                       <input type="text" inputmode="numeric" class="form-input sub-budget-input" 
+                         id="budget-${mainCat}-sub-${sub.id}" value="${val}" placeholder="0" 
+                         data-main="${mainCat}" 
+                         oninput="window.formatNumberInput(this); window.updateCategoryTotal('${mainCat}')" 
+                         style="padding-left:24px; height:30px; font-size:13px; text-align:right;">
                      </div>
                    </div>`;
     }
     html += `  </div>`;
     html += `</div>`;
   }
-
   el.innerHTML = html;
+}
+
+// 소분류 입력 시 실시간으로 대분류 합계 칸 업데이트
+export function updateCategoryTotal(mainCat) {
+  const group = document.querySelector(`.budget-main-group[data-category="${mainCat}"]`);
+  if (!group) return;
+  const subInputs = group.querySelectorAll('.sub-budget-input');
+  let total = 0;
+  subInputs.forEach(inp => {
+    const v = (inp.dataset.raw || inp.value).replace(/,/g, '');
+    if (v) total += Number(v);
+  });
+  const mainInp = document.getElementById(`budget-${mainCat}-main`);
+  if (mainInp) {
+    mainInp.value = total > 0 ? total.toLocaleString() : '';
+    mainInp.dataset.raw = total;
+  }
 }
 
 export async function saveBudgets() {

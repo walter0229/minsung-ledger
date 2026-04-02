@@ -5,7 +5,7 @@ import { store } from './store.js';
 import { initUI, showPage, checkDbStatus, openCamera, handleCameraInput, applyThemePreset, toggleDarkMode, toggleReminder, saveReminderTime, renderThemeGrid, openModal, closeModal, closeModalOnBg } from './ui.js';
 import { renderCalendarScreen, setStatsPeriod, setStatsType, renderStatsScreen, setReportPeriod, renderReportScreen, calPrevMonth, calNextMonth, showCalDetail } from './stats.js';
 import { openAddModal, setTxType, onMainCatChange, selectTxAccount, selectTransferFrom, selectTransferTo, selectTxIcon, saveTx, showTxDetail, deleteTx, doSearch, renderTxItem } from './transactions.js';
-import { openBudgetModal, renderBudgetInputList, saveBudgets } from './budget.js';
+import { openBudgetModal, renderBudgetInputList, updateCategoryTotal, saveBudgets } from './budget.js';
 import { getTotalBalanceInBase, convertCurrency } from './sync.js';
 
 // =============================================
@@ -403,6 +403,7 @@ window.closeModalOnBg = closeModalOnBg;
 window.renderStats = renderStatsScreen;
 window.renderReport = renderReportScreen;
 window.openBudgetModal = openBudgetModal;
+window.updateCategoryTotal = updateCategoryTotal;
 window.saveBudgets = saveBudgets;
 
 window.saveApiSettings = async function() {
