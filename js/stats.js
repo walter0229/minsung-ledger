@@ -239,14 +239,6 @@ export async function sendAiMsg() {
   }
 }
 
-// 윈도우 전역 함수로 등록 (HTML 호출용)
-window.sendAiMsg = sendAiMsg;
-window.renderStats = renderStatsScreen;
-window.renderReport = renderReportScreen;
-window.calPrevMonth = calPrevMonth;
-window.calNextMonth = calNextMonth;
-window.showCalDetail = showCalDetail;
-
 export function renderReportScreen() {
   renderAnalysisCharts();
   renderAssetChart();
@@ -339,7 +331,10 @@ function renderAssetChart() {
 export async function renderCalendarScreen() {
   const d = state.calendarDate;
   const year = d.getFullYear(), month = d.getMonth();
-  document.getElementById('calTitle').textContent = `${year}년 ${month + 1}월`;
+  const calTitle = document.getElementById('calTitle');
+  if(!calTitle) return;
+  
+  calTitle.textContent = `${year}년 ${month + 1}월`;
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = getDaysInMonth(year, month);
@@ -385,7 +380,8 @@ export async function renderCalendarScreen() {
     </div>`;
   }
 
-  document.getElementById('calGrid').innerHTML = html;
+  const calGrid = document.getElementById('calGrid');
+  if(calGrid) calGrid.innerHTML = html;
 }
 
 export function calPrevMonth() {
@@ -401,6 +397,8 @@ export function calNextMonth() {
 
 export function showCalDetail(dateStr) {
   const detailEl = document.getElementById('calDetail');
+  if(!detailEl) return;
+  
   const txs = state.transactions.filter(t => t.date?.slice(0, 10) === dateStr);
   detailEl.style.display = 'block';
 
@@ -412,3 +410,14 @@ export function showCalDetail(dateStr) {
   const items = txs.map(t => renderTxItem(t)).join('');
   detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${items}`;
 }
+
+// 윈도우 전역 함수 등록 (최종)
+window.sendAiMsg = sendAiMsg;
+window.renderStats = renderStatsScreen;
+window.renderReport = renderReportScreen;
+window.calPrevMonth = calPrevMonth;
+window.calNextMonth = calNextMonth;
+window.showCalDetail = showCalDetail;
+window.setStatsPeriod = setStatsPeriod;
+window.setStatsType = setStatsType;
+window.setReportPeriod = setReportPeriod;
