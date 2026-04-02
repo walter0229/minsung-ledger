@@ -118,7 +118,34 @@ class AppwriteDB {
     this.local.delete(colId, docId);
   }
 
-  // ... (기존 메서드들 생략) ...
+  // 🚀 utils.js 호환을 위한 레거시 명칭 API 복구
+  async listAccounts() { return this.getAccounts(); }
+  async listTransactions() { return this.getTransactions(); }
+  async listBudgets() { return this.getBudgets(); }
+
+  // 최신 도메인 메서드
+  async getAccounts() {
+    const res = await this.listDocs(COL.ACCOUNTS);
+    return res.documents || [];
+  }
+
+  async getTransactions() {
+    const res = await this.listDocs(COL.TRANSACTIONS, [
+      window.Appwrite.Query.orderDesc("date"),
+      window.Appwrite.Query.limit(1000)
+    ]);
+    return res.documents || [];
+  }
+
+  async getBudgets() {
+    const res = await this.listDocs(COL.BUDGETS);
+    return res.documents || [];
+  }
+
+  async getSettings() {
+    const res = await this.listDocs(COL.SETTINGS);
+    return (res.documents && res.documents[0]) || null;
+  }
 
   // 예산 Upsert (저장/수정) - 최적화 버전
   async saveBudget(data, existingList = null) {
