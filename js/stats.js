@@ -294,7 +294,7 @@ function renderAssetChart() {
 // ─────────────────────────────────────────────
 // 달력 렌더링
 // ─────────────────────────────────────────────
-export function renderCalendarScreen() {
+export async function renderCalendarScreen() {
   const d = state.calendarDate;
   const year = d.getFullYear(), month = d.getMonth();
   document.getElementById('calTitle').textContent = `${year}년 ${month + 1}월`;
@@ -303,6 +303,7 @@ export function renderCalendarScreen() {
   const daysInMonth = getDaysInMonth(year, month);
   const today = new Date();
   const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const baseCur = 'VND';
 
   const txs = state.transactions.filter(t => t.date?.startsWith(ym));
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
@@ -313,24 +314,29 @@ export function renderCalendarScreen() {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
     const dayTxs = txs.filter(t => t.date?.slice(0, 10) === dateStr);
-    const inc = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-    const exp = dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    
+    let dayInc = 0, dayExp = 0;
+    for (const t of dayTxs) {
+      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+      const cur = acc?.currency || 'VND';
+      const conv = await convertCurrency(Number(t.amount), cur, baseCur);
+      if (t.type === 'income') dayInc += conv;
+      if (t.type === 'expense') dayExp += conv;
+    }
+    const dayNet = dayInc - dayExp;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
-    let dots = '';
-    if (inc > 0) dots += '<div class="cal-dot income"></div>';
-    if (exp > 0) dots += '<div class="cal-dot expense"></div>';
-
-    let balHtml = '';
-    if (inc > 0 || exp > 0) {
-      const bal = inc - exp;
-      balHtml = `<div class="cal-bal ${bal >= 0 ? 'positive' : 'negative'}">${bal >= 0 ? '+' : '-'}</div>`;
-    }
+    // 칸이 좁으므로 세 자릿수 콤마 없이 정수로만 표시하거나 축약 가능. 대개 콤마 없이 표시
+    const f = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
+    const fNet = (v) => v !== 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
 
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
       <div class="cal-num">${day}</div>
-      <div class="cal-dot-row">${dots}</div>
-      ${balHtml}
+      <div class="cal-daily-stats">
+        ${dayInc > 0 ? `<div class="cal-inc-txt">${f(dayInc)}</div>` : ''}
+        ${dayExp > 0 ? `<div class="cal-exp-txt">${f(dayExp)}</div>` : ''}
+        ${dayNet !== 0 ? `<div class="cal-net-txt ${dayNet > 0 ? 'pos' : 'neg'}">${fNet(dayNet)}</div>` : ''}
+      </div>
     </div>`;
   }
 
