@@ -174,19 +174,46 @@ export function formatNumberInput(input) {
 export async function callGemini(prompt, imageBase64 = null) {
   const apiKey = state.settings.geminiApiKey;
   if (!apiKey) throw new Error('Gemini API Key가 설정되지 않았습니다.');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  
+  // 사용자 지침에 따라 1.5 / 2 버전은 절대 사용하지 않음
+  // 첫 번째 시도: gemini-3.1-pro
+  let model = GEMINI_MODEL; 
+  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const parts = [{ text: prompt }];
   if (imageBase64) {
     parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
   }
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts }] }),
-  });
-  if (!res.ok) throw new Error('Gemini API 오류: ' + res.statusText);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] }),
+    });
+    
+    if (!res.ok) {
+       // 3.1-pro 실패 시 3.0-flash로 재시도
+       if (model === 'gemini-3.1-pro') {
+         console.warn('⚠️ gemini-3.1-pro 호출 실패, 3.0-flash로 재시도합니다.');
+         model = 'gemini-3.0-flash';
+         url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+         const resRetry = await fetch(url, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ contents: [{ parts }] }),
+         });
+         if (!resRetry.ok) throw new Error(`Gemini API 오류 (${model}): ` + resRetry.statusText);
+         const dataRetry = await resRetry.json();
+         return dataRetry.candidates?.[0]?.content?.parts?.[0]?.text || '';
+       }
+       throw new Error(`Gemini API 오류 (${model}): ` + res.statusText);
+    }
+    
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (e) {
+    throw e;
+  }
 }
 
 // ── 영수증 OCR 파싱 ────────────────────────
