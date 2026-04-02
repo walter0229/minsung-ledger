@@ -317,6 +317,7 @@ export async function renderCalendarScreen() {
     const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
     const dayTxs = txs.filter(t => t.date?.slice(0, 10) === dateStr);
     
+    let dayInc = 0, dayExp = 0;
     for (const t of dayTxs) {
       const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
       const cur = acc?.currency || 'VND';
