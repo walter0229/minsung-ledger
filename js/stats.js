@@ -114,75 +114,53 @@ async function renderBudgetBars() {
   const el = document.getElementById('budgetBars');
   if(!el) return;
   
-  const month = (state.currentMonth || '').replace(/\./g, '-');
-  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
-  const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
+  const status = getBudgetStatus(state.currentMonth);
   
-  if (!budgets.length) {
+  if (!status.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">예산을 설정해주세요</div>';
     return;
   }
   
-  const baseCur = 'VND';
-  const status = [];
-  
-  try {
-    const rates = await fetchExchangeRates(baseCur);
+  // 🚀 전체 합계 계산 (대분류항목만 필터링하여 정확한 1배수 합계 산출)
+  const topLevel = status.filter(b => !b.subCategory || b.subCategory === "");
+  const totalBudgetSum = topLevel.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+  const totalUsedSum = topLevel.reduce((s, b) => s + (Number(b.used) || 0), 0);
+  const totalPct = totalBudgetSum > 0 ? (totalUsedSum / totalBudgetSum * 100).toFixed(1) : 0;
 
-    for (const b of budgets) {
-      let usedInVnd = 0;
-      const filterTxs = b.subCategory 
-        ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
-        : txs.filter(t => t.mainCategory === b.category);
+  let summaryHtml = `
+  <div class="budget-item total-summary" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; padding:12px; background:rgba(124,106,247,0.1); border-radius:12px; border:1px solid rgba(124,106,247,0.3);">
+    <span style="flex:0 0 130px; font-size:13px; font-weight:800; color:var(--accent2);">전체 합계</span>
+    <div class="progress-bg" style="flex:1; height:12px; margin-bottom:0; background:var(--bg3); border-radius:6px; overflow:hidden; position:relative;">
+      <div class="progress-bar" style="width:${Math.min(totalPct, 100)}%; height:100%; border-radius:6px; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.5s;"></div>
+      <span style="position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:9px; font-weight:900; color:white; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${totalPct}%</span>
+    </div>
+    <span style="flex:1.2; text-align:right; font-size:12px; color:var(--text); font-weight:700;">
+      ${Math.round(totalUsedSum).toLocaleString()} / ${Math.round(totalBudgetSum).toLocaleString()}
+    </span>
+  </div>`;
 
-      for (const t of filterTxs) {
-        const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
-        const cur = acc?.currency || 'VND';
-        const rate = (cur === baseCur) ? 1 : (rates[cur] ? 1/rates[cur] : 1);
-        usedInVnd += Number(t.amount) * rate;
-      }
-      
-      const bAmount = Number(b.amount) || 0;
-      status.push({ ...b, usedVnd: usedInVnd, percent: bAmount > 0 ? (usedInVnd / bAmount * 100).toFixed(1) : 0 });
-    }
+  el.innerHTML = summaryHtml + status.map(b => {
+    const pct = Number(b.percent);
+    const title = (b.subCategory && b.subCategory !== "") ? `${b.category}(${b.subCategory})` : b.category;
+    // 시각적 구분을 위해 소분류는 살짝 들여쓰기
+    const paddingLeft = (b.subCategory && b.subCategory !== "") ? '16px' : '4px';
+    const fontSize = (b.subCategory && b.subCategory !== "") ? '10px' : '11px';
+    const color = (b.subCategory && b.subCategory !== "") ? 'var(--text3)' : 'var(--text)';
 
-    // 🚀 전체 합계 계산 (대분류(Main) 항목 기준 - 중복 합계 방지)
-    const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
-    const totalBudgetSum = topLevelStatus.reduce((s, b) => s + (Number(b.amount) || 0), 0);
-    const totalUsedSum = topLevelStatus.reduce((s, b) => s + b.usedVnd, 0);
-    const totalPct = totalBudgetSum > 0 ? (totalUsedSum / totalBudgetSum * 100).toFixed(1) : 0;
-
-    let summaryHtml = `
-    <div class="budget-item total-summary" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; padding:12px; background:rgba(124,106,247,0.1); border-radius:12px; border:1px solid rgba(124,106,247,0.3);">
-      <span style="flex:0 0 130px; font-size:13px; font-weight:800; color:var(--accent2);">전체 합계</span>
-      <div class="progress-bg" style="flex:1; height:12px; margin-bottom:0; background:var(--bg3); border-radius:6px; overflow:hidden; position:relative;">
-        <div class="progress-bar" style="width:${totalPct}%; height:100%; border-radius:6px; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.5s;"></div>
-        <span style="position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:9px; font-weight:900; color:white; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${totalPct}%</span>
+    return `
+    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:${paddingLeft};">
+      <span style="flex:0 0 130px; font-size:${fontSize}; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${color};">${title}</span>
+      <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
+        <div class="progress-bar" style="width:${Math.min(pct, 100)}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
       </div>
-      <span style="flex:1.2; text-align:right; font-size:12px; color:var(--text); font-weight:700;">
-        ${Math.round(totalUsedSum).toLocaleString()} / ${Math.round(totalBudgetSum).toLocaleString()}
+      <span style="flex:0 0 35px; font-size:10px; font-weight:700; color:${pct>90?'var(--expense)':'var(--text2)'}; text-align:center; margin-left:2px;">${pct.toFixed(0)}%</span>
+      <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
+        ${Math.round(b.used).toLocaleString()} / ${Math.round(Number(b.amount) || 0).toLocaleString()}
       </span>
     </div>`;
-
-    el.innerHTML = summaryHtml + status.map(b => {
-      const pct = Math.min(Number(b.percent), 100);
-      const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
-      return `
-      <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:4px;">
-        <span style="flex:0 0 130px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
-        <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
-          <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
-        </div>
-        <span style="flex:0 0 35px; font-size:10px; font-weight:700; color:${pct>90?'var(--expense)':'var(--text2)'}; text-align:center; margin-left:2px;">${Number(b.percent).toFixed(0)}%</span>
-        <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
-          ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(Number(b.amount) || 0).toLocaleString()}
-        </span>
-      </div>`;
-    }).join('');
-  } catch (err) {
-    console.error('예산 데이터 렌더링 실패:', err);
-  }
+  }).join('');
 }
+
 
 // ─────────────────────────────────────────────
 // 보고서
