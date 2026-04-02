@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전
-export const APP_VERSION = '1.042';
+export const APP_VERSION = '1.043';
 
 export const state = {
   transactions: [],

@@ -150,7 +150,7 @@ async function renderBudgetBars() {
     const topLevelStatus = status.filter(b => !b.subCategory);
     const totalBudgetSum = topLevelStatus.reduce((s, b) => s + (Number(b.amount) || 0), 0);
     const totalUsedSum = topLevelStatus.reduce((s, b) => s + b.usedVnd, 0);
-    const totalPct = totalBudgetSum > 0 ? Math.min((totalUsedSum / totalBudgetSum * 100), 100).toFixed(1) : 0;
+    const totalPct = totalBudgetSum > 0 ? (totalUsedSum / totalBudgetSum * 100).toFixed(1) : 0;
 
     let summaryHtml = `
     <div class="budget-item total-summary" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; padding:12px; background:rgba(124,106,247,0.1); border-radius:12px; border:1px solid rgba(124,106,247,0.3);">
@@ -270,8 +270,10 @@ function renderAnalysisCharts() {
 
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
-  const totalBudget = budget.reduce((s, v) => s + v, 0);
-  const totalUsed = used.reduce((s, v) => s + v, 0);
+  // 🚀 중복 합산 방지 (대분류만 필터링)
+  const topLevelStatus = status.filter(b => !b.subCategory);
+  const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
+  const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
   const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
 
   if(window.Chart) {
