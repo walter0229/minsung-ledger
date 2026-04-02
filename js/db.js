@@ -57,6 +57,7 @@ class AppwriteDB {
   }
 
   async listDocs(colId, queries = []) {
+    await this.ready; // 🚀 세션 준비 완료까지 강제 대기 (레이스 컨디션 방지)
     if (this.online) {
       try {
         // 🚀 데이터 누락 방지를 위해 기본 limit 상향
@@ -72,6 +73,7 @@ class AppwriteDB {
   }
 
   async createDoc(colId, data, docId = null) {
+    await this.ready;
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
     if (this.online) {
       try {
@@ -82,6 +84,7 @@ class AppwriteDB {
   }
 
   async updateDoc(colId, docId, data) {
+    await this.ready;
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
     if (this.online) {
       try {
@@ -92,6 +95,7 @@ class AppwriteDB {
   }
 
   async deleteDoc(colId, docId) {
+    await this.ready;
     if (this.online) {
       try { await this.databases.deleteDocument(DB_ID, colId, docId); }
       catch (e) { console.warn('온라인 삭제 실패:', e.message); }
@@ -168,13 +172,14 @@ class AppwriteDB {
 
   // 거래 관련 호환성
   async createTransaction(d) { return this.createDoc(COL.TRANSACTIONS, d); }
-  async updateTransaction(id, d) { return this.updateDoc(COL.TRANSACTIONS, id, d); }
-  async deleteTransaction(id) { return this.deleteDoc(COL.TRANSACTIONS, id); }
+  async createTransaction(d) { await this.ready; return this.createDoc(COL.TRANSACTIONS, d); }
+  async updateTransaction(id, d) { await this.ready; return this.updateDoc(COL.TRANSACTIONS, id, d); }
+  async deleteTransaction(id) { await this.ready; return this.deleteDoc(COL.TRANSACTIONS, id); }
   
   // 계좌 관련 호환성
-  async createAccount(d) { return this.createDoc(COL.ACCOUNTS, d); }
-  async updateAccount(id, d) { return this.updateDoc(COL.ACCOUNTS, id, d); }
-  async deleteAccount(id) { return this.deleteDoc(COL.ACCOUNTS, id); }
+  async createAccount(d) { await this.ready; return this.createDoc(COL.ACCOUNTS, d); }
+  async updateAccount(id, d) { await this.ready; return this.updateDoc(COL.ACCOUNTS, id, d); }
+  async deleteAccount(id) { await this.ready; return this.deleteDoc(COL.ACCOUNTS, id); }
 }
 
 export const db = new AppwriteDB();
