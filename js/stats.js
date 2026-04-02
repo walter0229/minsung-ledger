@@ -153,7 +153,7 @@ async function renderBudgetBars() {
 
     let summaryHtml = `
     <div class="budget-item total-summary" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; padding:12px; background:rgba(124,106,247,0.1); border-radius:12px; border:1px solid rgba(124,106,247,0.3);">
-      <span style="flex:0 0 110px; font-size:13px; font-weight:800; color:var(--accent2);">전체 합계</span>
+      <span style="flex:0 0 130px; font-size:13px; font-weight:800; color:var(--accent2);">전체 합계</span>
       <div class="progress-bg" style="flex:1; height:12px; margin-bottom:0; background:var(--bg3); border-radius:6px; overflow:hidden; position:relative;">
         <div class="progress-bar" style="width:${totalPct}%; height:100%; border-radius:6px; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.5s;"></div>
         <span style="position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:9px; font-weight:900; color:white; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${totalPct}%</span>
@@ -168,7 +168,7 @@ async function renderBudgetBars() {
       const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
       return `
       <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:4px;">
-        <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
+        <span style="flex:0 0 130px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
         <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
           <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
         </div>
