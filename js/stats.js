@@ -26,7 +26,7 @@ function getStatsTxs() {
   const now = new Date();
   if (store.statsPeriod === 'monthly') {
     const month = state.currentMonth; // YYYY-MM
-    return state.transactions.filter(t => t.date?.startsWith(month) && t.type === store.statsType);
+    return state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month.replace(/\./g, '-')) && t.type === store.statsType);
   }
   // 주간 (현재 주)
   const startOfWeek = new Date(now);
@@ -112,9 +112,11 @@ export async function renderStatsScreen() {
 
 async function renderBudgetBars() {
   const el = document.getElementById('budgetBars');
-  const month = state.currentMonth;
-  const budgets = state.budgets.filter(b => b.yearMonth === month);
-  const txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+  if(!el) return;
+  
+  const month = (state.currentMonth || '').replace(/\./g, '-');
+  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
+  const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
   
   if (!budgets.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">예산을 설정해주세요</div>';
@@ -208,7 +210,6 @@ export async function sendAiMsg() {
     return;
   }
 
-  // 데이터 컨텍스트 구성
   const accountCtx = state.accounts.map(a => `${a.name}: ${Math.round(a.initialBalance).toLocaleString()} ${a.currency || 'VND'}`).join(', ');
   const budgetStatus = getBudgetStatus(state.currentMonth);
   const budgetCtx = budgetStatus.map(b => `${b.category}: ${Math.round(b.used).toLocaleString()} / ${Math.round(b.amount).toLocaleString()}`).join(', ');
@@ -227,10 +228,7 @@ export async function sendAiMsg() {
   try {
     msgEl.innerHTML = '🤖 <b>AI 비서가 데이터를 분석 중입니다...</b><br><small>잠시만 기다려주세요.</small>';
     inputEl.value = '';
-    
     const response = await callGemini(prompt);
-    
-    // 마크다운 줄바꿈 처리 등을 위한 간단한 변환
     const formatted = response.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
     msgEl.innerHTML = formatted;
   } catch (e) {
@@ -249,6 +247,7 @@ function renderAnalysisCharts() {
   const labels = status.map(b => b.subCategory ? `${b.category}(${b.subCategory})` : b.category);
   const used = status.map(b => Number(b.used));
   const budget = status.map(b => Number(b.amount));
+  const month = (state.currentMonth || '').replace(/\./g, '-');
   const timeProgress = getTimeProgress(store.reportPeriod === 'monthly' ? 'monthly' : store.reportPeriod === 'weekly' ? 'weekly' : 'yearly');
 
   if (store.usageChart) store.usageChart.destroy();
@@ -300,7 +299,7 @@ function renderAnalysisCharts() {
 function renderAssetChart() {
   const accounts = state.accounts;
   const labels = accounts.map(a => a.name);
-  const data = accounts.map(a => Number(a.initialBalance)); // 단순 초기화
+  const data = accounts.map(a => Number(a.initialBalance));
   const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
 
   if (store.assetChart) store.assetChart.destroy();
@@ -333,7 +332,6 @@ export async function renderCalendarScreen() {
   const year = d.getFullYear(), month = d.getMonth();
   const calTitle = document.getElementById('calTitle');
   if(!calTitle) return;
-  
   calTitle.textContent = `${year}년 ${month + 1}월`;
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -342,17 +340,16 @@ export async function renderCalendarScreen() {
   const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
   const baseCur = 'VND';
 
-  const txs = state.transactions.filter(t => t.date?.startsWith(ym));
+  const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(ym));
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
 
   let monthlyCumulativeNet = 0;
-
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
-    const dayTxs = txs.filter(t => t.date?.slice(0, 10) === dateStr);
+    const dayTxs = txs.filter(t => (t.date || '').replace(/\./g, '-').slice(0, 10) === dateStr);
     
     let dayInc = 0, dayExp = 0;
     for (const t of dayTxs) {
@@ -398,20 +395,17 @@ export function calNextMonth() {
 export function showCalDetail(dateStr) {
   const detailEl = document.getElementById('calDetail');
   if(!detailEl) return;
-  
-  const txs = state.transactions.filter(t => t.date?.slice(0, 10) === dateStr);
+  const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').slice(0, 10) === dateStr);
   detailEl.style.display = 'block';
-
   if (!txs.length) {
     detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div><div class="cal-detail-empty">이날 거래 내역이 없습니다</div>`;
     return;
   }
-
   const items = txs.map(t => renderTxItem(t)).join('');
   detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${items}`;
 }
 
-// 윈도우 전역 함수 등록 (최종)
+// 윈도우 전역 함수 등록
 window.sendAiMsg = sendAiMsg;
 window.renderStats = renderStatsScreen;
 window.renderReport = renderReportScreen;

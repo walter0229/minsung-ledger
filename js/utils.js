@@ -5,6 +5,8 @@ import { db } from './db.js';
 // 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
 // =============================================
 
+// 앱 버전
+export const APP_VERSION = '1.024';
 
 export const state = {
   transactions: [],
@@ -22,7 +24,10 @@ export const state = {
 };
 
 // ── 날짜 유틸 ──────────────────────────────
-export function todayStr() { return new Date().toISOString().slice(0, 10); }
+export function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 export function monthStr(d = new Date()) { return d.toISOString().slice(0, 7); }
 export function fmtDate(s) {
   if (!s) return '';
@@ -101,8 +106,9 @@ export function getMonthSummary(yearMonth) {
 
 // ── 예산 대비 사용 ─────────────────────────
 export function getBudgetStatus(yearMonth) {
-  const budgets = state.budgets.filter(b => b.yearMonth === yearMonth);
-  const txs = state.transactions.filter(t => t.date?.startsWith(yearMonth) && t.type === 'expense');
+  const month = (yearMonth || '').replace(/\./g, '-');
+  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
+  const txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
   return budgets.map(b => {
     // 소분류 설정 지원에 맞춰, b.subCategory가 있으면 해당 서브카테고리 사용액, 없으면 main카테고리 사용액 산출
     let used = 0;
