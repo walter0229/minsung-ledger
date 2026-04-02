@@ -24,9 +24,11 @@ export function setStatsType(t, btn) {
 
 function getStatsTxs() {
   const now = new Date();
-  if (store.statsPeriod === 'monthly') return state.transactions.filter(t => t.date?.startsWith(state.currentMonth) && t.type === store.statsType);
-  if (store.statsPeriod === 'yearly') return state.transactions.filter(t => t.date?.startsWith(String(now.getFullYear())) && t.type === store.statsType);
-  // weekly
+  if (store.statsPeriod === 'monthly') {
+    const month = state.currentMonth; // YYYY-MM
+    return state.transactions.filter(t => t.date?.startsWith(month) && t.type === store.statsType);
+  }
+  // 주간 (현재 주)
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
   const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
@@ -121,36 +123,46 @@ async function renderBudgetBars() {
   
   const baseCur = 'VND';
   const status = [];
+  
+  try {
+    // 🚀 최적화: 환율 정보를 미리 로드 (단 1번만 호출)
+    const rates = await fetchExchangeRates(baseCur);
 
-  for (const b of budgets) {
-    let usedInVnd = 0;
-    const filterTxs = b.subCategory 
-      ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
-      : txs.filter(t => t.mainCategory === b.category);
+    for (const b of budgets) {
+      let usedInVnd = 0;
+      const filterTxs = b.subCategory 
+        ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
+        : txs.filter(t => t.mainCategory === b.category);
 
-    for (const t of filterTxs) {
-      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
-      const cur = acc?.currency || 'VND';
-      usedInVnd += await convertCurrency(Number(t.amount), cur, baseCur);
+      for (const t of filterTxs) {
+        const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+        const cur = acc?.currency || 'VND';
+        // 🚀 최적화: 개별 API 호출 대신 가져온 rates 객체 바로 이용
+        const rate = (cur === baseCur) ? 1 : (rates[cur] ? 1/rates[cur] : 1);
+        usedInVnd += Number(t.amount) * rate;
+      }
+      
+      const bAmount = Number(b.amount) || 0;
+      status.push({ ...b, usedVnd: usedInVnd, percent: bAmount > 0 ? (usedInVnd / bAmount * 100).toFixed(1) : 0 });
     }
-    
-    status.push({ ...b, usedVnd: usedInVnd, percent: b.amount > 0 ? (usedInVnd / b.amount * 100).toFixed(1) : 0 });
-  }
 
-  el.innerHTML = status.map(b => {
-    const pct = Math.min(Number(b.percent), 100);
-    const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
-    return `
-    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-      <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
-      <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden;">
-        <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
-      </div>
-      <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
-        ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(b.amount).toLocaleString()}
-      </span>
-    </div>`;
-  }).join('');
+    el.innerHTML = status.map(b => {
+      const pct = Math.min(Number(b.percent), 100);
+      const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
+      return `
+      <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
+        <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden;">
+          <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
+        </div>
+        <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
+          ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(Number(b.amount) || 0).toLocaleString()}
+        </span>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('예산 데이터 렌더링 실패:', err);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -238,189 +250,80 @@ function renderAnalysisCharts() {
         labels,
         datasets: [
           { label: '예산', data: budget, backgroundColor: 'rgba(124,106,247,0.2)', borderColor: 'rgba(124,106,247,0.6)', borderWidth: 1 },
-          { label: '사용', data: used, backgroundColor: used.map((u, i) => u > budget[i] ? 'rgba(248,113,113,0.7)' : 'rgba(52,211,153,0.7)'), borderWidth: 0 }
+          { label: '지출', data: used, backgroundColor: 'rgba(248,113,113,0.5)', borderColor: 'var(--expense)', borderWidth: 1 }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9090b0', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }, y: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } } } }
-    });
-  }
-
-  // 시간 경과율 차트
-  if (store.progressChart) store.progressChart.destroy();
-  const ctx2 = document.getElementById('progressChart').getContext('2d');
-  const totalBudget = budget.reduce((s, v) => s + v, 0);
-  const totalUsed = used.reduce((s, v) => s + v, 0);
-  const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
-
-  if(window.Chart) {
-    store.progressChart = new window.Chart(ctx2, {
-      type: 'bar',
-      data: {
-        labels: ['시간 경과율', '예산 사용률'],
-        datasets: [{
-          data: [timeProgress, usagePct],
-          backgroundColor: [
-            'rgba(96,165,250,0.7)',
-            usagePct > timeProgress ? 'rgba(248,113,113,0.7)' : 'rgba(52,211,153,0.7)'
-          ],
-          borderWidth: 0, borderRadius: 6
-        }]
-      },
       options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toFixed(1)}%` } } },
-        scales: { x: { max: 100, ticks: { callback: v => v + '%', color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }, y: { ticks: { color: '#9090b0' }, grid: { display: false } } }
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#9090b0', font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.dataset.label}: ${Math.round(ctx.raw).toLocaleString()} VND`
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#5a5a78', font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: '#9090b0', font: { size: 10 } } }
+        }
       }
     });
   }
-}
 
-function renderAssetChart() {
-  if (store.assetChart) store.assetChart.destroy();
-  const ctx = document.getElementById('assetChart').getContext('2d');
-  const now = new Date();
-  let labels = [], data = [];
-
-  // TODO: getTotalBalanceInBase() 를 통한 다중 통화 통합은
-  // 복잡성을 피하기 위해 여기서는 단순 로직 유지 혹은 환율 모듈 적용 시 수정 가능
-  if (store.reportPeriod === 'monthly') {
-    for (let d = 1; d <= getDaysInMonth(now.getFullYear(), now.getMonth()); d++) {
-      const dateStr = `${state.currentMonth}-${String(d).padStart(2, '0')}`;
-      labels.push(d + '일');
-      const txsUntil = state.transactions.filter(t => t.date?.slice(0, 10) <= dateStr);
-      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
-      data.push(initBal + inc - exp);
-    }
-  } else if (store.reportPeriod === 'yearly') {
-    for (let m = 1; m <= 12; m++) {
-      const ym = `${now.getFullYear()}-${String(m).padStart(2, '0')}`;
-      labels.push(m + '월');
-      const txsUntil = state.transactions.filter(t => t.date?.startsWith(String(now.getFullYear())) && t.date?.slice(0, 7) <= ym);
-      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
-      data.push(initBal + inc - exp);
-    }
-  } else {
-    // weekly
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
-      labels.push(['월','화','수','목','금','토','일'][i]);
-      const txsUntil = state.transactions.filter(t => t.date?.slice(0, 10) <= dateStr);
-      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
-      data.push(initBal + inc - exp);
-    }
-  }
-
+  if (store.progressChart) store.progressChart.destroy();
+  const ctx2 = document.getElementById('progressChart').getContext('2d');
+  
   if(window.Chart) {
-    store.assetChart = new window.Chart(ctx, {
+    store.progressChart = new window.Chart(ctx2, {
       type: 'line',
       data: {
-        labels,
+        labels: ['시작', '현재(경과)', '종료'],
         datasets: [{
-          label: '총 자산 흐름',
-          data,
-          borderColor: '#7c6af7',
+          label: '시간 경과율',
+          data: [0, timeProgress, 100],
+          borderColor: 'var(--accent)',
           backgroundColor: 'rgba(124,106,247,0.1)',
-          fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#7c6af7'
+          fill: true,
+          tension: 0.4
         }]
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
         plugins: { legend: { display: false } },
         scales: {
-          x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } },
-          y: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }
+          y: { min: 0, max: 100, ticks: { color: '#5a5a78' } },
+          x: { ticks: { color: '#9090b0' } }
         }
       }
     });
   }
 }
 
-// ─────────────────────────────────────────────
-// 달력 렌더링
-// ─────────────────────────────────────────────
-export async function renderCalendarScreen() {
-  const d = state.calendarDate;
-  const year = d.getFullYear(), month = d.getMonth();
-  document.getElementById('calTitle').textContent = `${year}년 ${month + 1}월`;
+function renderAssetChart() {
+  const accounts = state.accounts;
+  const labels = accounts.map(a => a.name);
+  const data = accounts.map(a => Number(a.initialBalance)); // 단순 초기화
+  const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
 
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = getDaysInMonth(year, month);
-  const today = new Date();
-  const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const baseCur = 'VND';
-
-  const txs = state.transactions.filter(t => t.date?.startsWith(ym));
-  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
-  let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
-
-  let monthlyCumulativeNet = 0; // 매달 1일 0원부터 시작
-
-  for (let i = 0; i < firstDay; i++) html += '<div></div>';
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
-    const dayTxs = txs.filter(t => t.date?.slice(0, 10) === dateStr);
-    
-    let dayInc = 0, dayExp = 0;
-    for (const t of dayTxs) {
-      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
-      const cur = acc?.currency || 'VND';
-      const conv = await convertCurrency(Number(t.amount), cur, baseCur);
-      if (t.type === 'income') dayInc += conv;
-      if (t.type === 'expense') dayExp += conv;
-    }
-    const dayNet = dayInc - dayExp;
-    monthlyCumulativeNet += dayNet;
-    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-
-    // 칸이 좁으므로 수치를 작게 표시
-    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fNet = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
-
-    html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
-      <div class="cal-num">${day}</div>
-      <div class="cal-daily-stats">
-        ${dayInc > 0 ? `<div class="cal-inc-txt">${fInc(dayInc)}</div>` : ''}
-        ${dayExp > 0 ? `<div class="cal-exp-txt">${fExp(dayExp)}</div>` : ''}
-        <div class="cal-net-txt ${monthlyCumulativeNet > 0 ? 'pos' : monthlyCumulativeNet < 0 ? 'neg' : ''}">${fNet(monthlyCumulativeNet)}</div>
-      </div>
-    </div>`;
+  if (store.assetChart) store.assetChart.destroy();
+  const ctx = document.getElementById('assetChart').getContext('2d');
+  
+  if(window.Chart) {
+    store.assetChart = new window.Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: '자산', data, backgroundColor: colors.slice(0, data.length) }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#5a5a78' } },
+          y: { ticks: { color: '#9090b0' } }
+        }
+      }
+    });
   }
-
-  document.getElementById('calGrid').innerHTML = html;
-}
-
-export function calPrevMonth() {
-  const d = state.calendarDate;
-  state.calendarDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-  renderCalendarScreen();
-}
-export function calNextMonth() {
-  const d = state.calendarDate;
-  state.calendarDate = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-  renderCalendarScreen();
-}
-
-export function showCalDetail(dateStr) {
-  const detailEl = document.getElementById('calDetail');
-  const txs = state.transactions.filter(t => t.date?.slice(0, 10) === dateStr);
-  detailEl.style.display = 'block';
-
-  if (!txs.length) {
-    detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div><div class="cal-detail-empty">이날 거래 내역이 없습니다</div>`;
-    return;
-  }
-
-  const items = txs.map(t => renderTxItem(t)).join('');
-  detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${items}`;
 }
