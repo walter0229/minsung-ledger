@@ -68,6 +68,8 @@ export const ICONS = {
   cny: 'icons/money_cny.png',
   cad: 'icons/money_cad.png',
   php: 'icons/money_php.png',
+  thb: 'icons/money_thb.png',
+  mvr: 'icons/money_mvr.png',
 
   // 은행
   hana: 'icons/hana_logo.png',
@@ -142,6 +144,8 @@ export const CURRENCIES = [
   { code: 'CNY', symbol: '¥', name: '중국 위안', icon: 'cny' },
   { code: 'CAD', symbol: 'C$', name: '캐나다 달러', icon: 'cad' },
   { code: 'PHP', symbol: '₱', name: '필리핀 페소', icon: 'php' },
+  { code: 'THB', symbol: '฿', name: '태국 바트', icon: 'thb' },
+  { code: 'MVR', symbol: 'ރ.', name: '몰디브 루피야', icon: 'mvr' },
 ];
 
 // 계좌 유형
@@ -155,4 +159,4 @@ export const ACCOUNT_TYPES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.040';
+export const APP_VERSION = '1.041';

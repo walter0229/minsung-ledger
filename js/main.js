@@ -362,7 +362,7 @@ window.saveReminderTime = saveReminderTime;
 // UI 전역 렌더
 window.renderCurrencyIconGrid = function() {
   const el = document.getElementById('currencyIconGrid');
-  const cur = ['vnd','krw','usd','cny','cad','php'];
+  const cur = ['vnd','krw','usd','cny','cad','php','thb','mvr'];
   el.innerHTML = cur.map(k => `
     <div class="icon-item ${store.selectedCurrencyIcon===k?'selected':''}" onclick="window.selectCurrencyIcon('${k}')" id="cur-icon-${k}">
       ${iconImg(k, 28)}
@@ -395,7 +395,7 @@ window.selectBankIcon = function(key) {
 };
 window.updateAccountIcons = function() {
   const cur = document.getElementById('accountCurrency').value.toLowerCase();
-  const map = {vnd:'vnd',krw:'krw',usd:'usd',cny:'cny',cad:'cad',php:'php'};
+  const map = {vnd:'vnd',krw:'krw',usd:'usd',cny:'cny',cad:'cad',php:'php',thb:'thb',mvr:'mvr'};
   if (map[cur]) { store.selectedCurrencyIcon = map[cur]; window.renderCurrencyIconGrid(); }
 };
 window.closeModal = closeModal;
