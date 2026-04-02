@@ -5,13 +5,13 @@ import { db } from './db.js';
 // 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
 // =============================================
 
+
 export const state = {
   transactions: [],
   accounts: [],
   budgets: [],
   settings: {
     geminiApiKey: '',
-    appwriteApiKey: '',
     theme: 'dark',
     reminderEnabled: false,
     reminderTime: '09:00',
