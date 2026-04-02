@@ -2,7 +2,7 @@ import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimePro
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
-import { fetchExchangeRates, convertCurrency } from './sync.js';
+import { fetchExchangeRates, convertCurrency, getBalanceAtDate } from './sync.js';
 
 // =============================================
 // 민성이의 가계부 - 통계 및 차트 전담
