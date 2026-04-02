@@ -69,9 +69,32 @@ export async function loadAll() {
       db.listAccounts(),
       db.listBudgets(),
     ]);
-    state.transactions = txs;
-    state.accounts = accs;
-    state.budgets = buds;
+    // 데이터 중복 제거 (ID 기준)
+    const unique = (arr) => {
+      const seen = new Set();
+      return arr.filter(item => {
+        if (!item.$id) return true; // ID 없는 경우(드문 경우) 유지
+        if (seen.has(item.$id)) return false;
+        seen.add(item.$id);
+        return true;
+      });
+    };
+
+    state.accounts = unique(accs);
+    state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
+    
+    // 예산 데이터 중복 제거 (ID가 다르더라도 내용 - 년월, 대분류, 소분류 - 이 같으면 중복으로 간주)
+    const budgetMap = {};
+    unique(buds).forEach(b => {
+      const ym = (b.yearMonth||'').replace(/\./g,'-');
+      const cat = b.category || '기타';
+      const sub = b.subCategory || '';
+      const key = `${ym}_${cat}_${sub}`;
+      // 이미 같은 키의 예산이 있다면, 나중 것(Appwrite 특성상 더 최신일 가능성)으로 덮어씀
+      budgetMap[key] = b;
+    });
+    state.budgets = Object.values(budgetMap);
+
     
     const s = await db.getSettings();
     if (s) Object.assign(state.settings, s);
