@@ -82,6 +82,30 @@ export async function getTotalBalanceInBase(accounts, transactions, baseCur = 'V
       else totalInBase += conv;
     }
   }
-  
+  return totalInBase;
+}
+
+// 특정 날짜(toDate: 'YYYY-MM-DD') 이전까지의 합산 잔액을 VND로 계산
+export async function getBalanceAtDate(toDateStr, baseCur = 'VND') {
+  const toDate = new Date(toDateStr);
+  let totalInBase = 0;
+  for (const acc of state.accounts) {
+    const cur = acc.currency || 'VND';
+    let rawBal = Number(acc.initialBalance || 0);
+    for (const t of state.transactions) {
+      if (!t.date) continue;
+      const tDate = new Date(t.date);
+      if (tDate >= toDate) continue;
+      if (t.type === 'income' && t.accountId === acc.$id) rawBal += Number(t.amount);
+      if (t.type === 'expense' && t.accountId === acc.$id) rawBal -= Number(t.amount);
+      if (t.type === 'transfer') {
+        if (t.fromAccountId === acc.$id) rawBal -= Number(t.amount);
+        if (t.toAccountId === acc.$id) rawBal += Number(t.amount);
+      }
+    }
+    const conv = await convertCurrency(rawBal, cur, baseCur);
+    if (acc.type === 'loan') totalInBase -= conv;
+    else totalInBase += conv;
+  }
   return totalInBase;
 }

@@ -309,6 +309,9 @@ export async function renderCalendarScreen() {
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
 
+  const firstOfMonth = `${ym}-01`;
+  let runningBal = await getBalanceAtDate(firstOfMonth, baseCur);
+
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -324,18 +327,21 @@ export async function renderCalendarScreen() {
       if (t.type === 'expense') dayExp += conv;
     }
     const dayNet = dayInc - dayExp;
+    runningBal += dayNet;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
     // 칸이 좁으므로 세 자릿수 콤마 없이 정수로만 표시하거나 축약 가능. 대개 콤마 없이 표시
     const f = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
     const fNet = (v) => v !== 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
+    const fBal = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
 
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
       <div class="cal-num">${day}</div>
       <div class="cal-daily-stats">
         ${dayInc > 0 ? `<div class="cal-inc-txt">${f(dayInc)}</div>` : ''}
         ${dayExp > 0 ? `<div class="cal-exp-txt">${f(dayExp)}</div>` : ''}
-        ${dayNet !== 0 ? `<div class="cal-net-txt ${dayNet > 0 ? 'pos' : 'neg'}">${fNet(dayNet)}</div>` : ''}
+        <div class="cal-net-txt ${dayNet > 0 ? 'pos' : dayNet < 0 ? 'neg' : ''}">${fNet(dayNet)}</div>
+        <div class="cal-cum-txt">${fBal(runningBal)}</div>
       </div>
     </div>`;
   }
