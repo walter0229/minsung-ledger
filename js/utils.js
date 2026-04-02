@@ -192,10 +192,10 @@ export async function callGemini(prompt, imageBase64 = null) {
     });
     
     if (!res.ok) {
-       // 3.1-pro 실패 시 3.0-flash로 재시도
-       if (model === 'gemini-3.1-pro') {
-         console.warn('⚠️ gemini-3.1-pro 호출 실패, 3.0-flash로 재시도합니다.');
-         model = 'gemini-3.0-flash';
+       // 3.1-pro-preview 실패 시 3-flash-preview로 재시도
+       if (model === 'gemini-3.1-pro-preview') {
+         console.warn('⚠️ gemini-3.1-pro-preview 호출 실패, gemini-3-flash-preview로 재시도합니다.');
+         model = 'gemini-3-flash-preview';
          url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
          const resRetry = await fetch(url, {
            method: 'POST',

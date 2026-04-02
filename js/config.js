@@ -151,7 +151,7 @@ export const ACCOUNT_TYPES = [
 ];
 
 // Gemini 모델
-export const GEMINI_MODEL = 'gemini-3.1-pro';
+export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 // 앱 버전
-export const APP_VERSION = '1.015';
+export const APP_VERSION = '1.016';
