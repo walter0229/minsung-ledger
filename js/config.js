@@ -80,10 +80,12 @@ export const ICONS = {
 // 카테고리 정의
 export const CATEGORIES = {
   한국: [
-    { id: 'family_kr', name: '가족', icon: 'family_kr' },
-    { id: 'transport', name: '교통', icon: 'transport' },
-    { id: 'health', name: '의료/건강', icon: 'health' },
-    { id: 'insurance', name: '보험', icon: 'insurance' },
+    { id: 'family_kr', name: '가족용돈', icon: 'family_kr' },
+    { id: 'phone', name: '전화비', icon: 'phone' },
+    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
+    { id: 'apartment', name: '관리비', icon: 'apartment' },
+    { id: 'insurance', name: '보험료', icon: 'insurance' },
+    { id: 'gift_box', name: '경조사비', icon: 'gift_box' },
     { id: 'etc', name: '기타', icon: 'etc' },
   ],
   식비: [
