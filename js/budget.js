@@ -112,7 +112,9 @@ export async function saveBudgets() {
     if(window.closeModal) window.closeModal('budgetModal');
     if(typeof window.renderStats === 'function') window.renderStats();
   } catch(e) { 
-    toast('❌ ' + e.message, 'error'); 
+    console.error('예산 저장 최종 실패:', e);
+    toast('❌ 저장 실패: ' + (e.message || '알 수 없는 오류'), 'error'); 
+    alert('⚠️ 예산 저장 중 오류가 발생했습니다.\n\n사유: ' + (e.message || '서버 연결 불안정 또는 권한 문제') + '\n\n페이지를 새로고침한 후 다시 시도해 주세요.');
   }
   showLoading(false);
 }

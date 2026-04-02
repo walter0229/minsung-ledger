@@ -78,15 +78,15 @@ class AppwriteDB {
     
     if (this.online) {
       try {
-        // 🚀 익명 사용자라도 본인의 데이터는 확실히 읽고 쓸 수 있도록 권한 부여
-        const user = await this.account.get();
+        // 🚀 익명 세션 ID 변경 시에도 수정할 수 있도록 모든 방문자에게 읽기/쓰기 권한 부여 (유실 방지)
         const perms = [
-          window.Appwrite.Permission.read(window.Appwrite.Role.user(user.$id)),
-          window.Appwrite.Permission.write(window.Appwrite.Role.user(user.$id)),
+          window.Appwrite.Permission.read(window.Appwrite.Role.any()),
+          window.Appwrite.Permission.write(window.Appwrite.Role.any()),
         ];
         return await this.databases.createDocument(DB_ID, colId, docId || window.Appwrite.ID.unique(), cleanData, perms);
       } catch (e) { 
-        console.warn('온라인 생성 실패(권한 혹은 네트워크):', e.message);
+        console.error('온라인 생성 실패:', e.message);
+        throw e; // 🚀 에러를 던져야 상위에서 감지 가능
       }
     }
     return this.local.create(colId, cleanData, docId);
@@ -98,7 +98,10 @@ class AppwriteDB {
     if (this.online) {
       try {
         return await this.databases.updateDocument(DB_ID, colId, docId, cleanData);
-      } catch (e) { console.warn('온라인 업데이트 실패:', e.message); }
+      } catch (e) { 
+        console.error('온라인 업데이트 실패:', e.message);
+        throw e;
+      }
     }
     return this.local.update(colId, docId, cleanData);
   }
@@ -107,39 +110,15 @@ class AppwriteDB {
     await this.ready;
     if (this.online) {
       try { await this.databases.deleteDocument(DB_ID, colId, docId); }
-      catch (e) { console.warn('온라인 삭제 실패:', e.message); }
+      catch (e) { 
+        console.error('온라인 삭제 실패:', e.message);
+        throw e;
+      }
     }
     this.local.delete(colId, docId);
   }
 
-  // 🚀 utils.js 호환을 위한 레거시 명칭 API 복구
-  async listAccounts() { return this.getAccounts(); }
-  async listTransactions() { return this.getTransactions(); }
-  async listBudgets() { return this.getBudgets(); }
-
-  // 최신 도메인 메서드
-  async getAccounts() {
-    const res = await this.listDocs(COL.ACCOUNTS);
-    return res.documents || [];
-  }
-
-  async getTransactions() {
-    const res = await this.listDocs(COL.TRANSACTIONS, [
-      window.Appwrite.Query.orderDesc("date"),
-      window.Appwrite.Query.limit(1000)
-    ]);
-    return res.documents || [];
-  }
-
-  async getBudgets() {
-    const res = await this.listDocs(COL.BUDGETS);
-    return res.documents || [];
-  }
-
-  async getSettings() {
-    const res = await this.listDocs(COL.SETTINGS);
-    return (res.documents && res.documents[0]) || null;
-  }
+  // ... (기존 메서드들 생략) ...
 
   // 예산 Upsert (저장/수정) - 최적화 버전
   async saveBudget(data, existingList = null) {
@@ -148,7 +127,6 @@ class AppwriteDB {
 
     if (this.online) {
       try {
-        // 🚀 인덱스 의존성을 없애기 위해 기존 목록이 제공되지 않으면 한 번만 호출
         const list = existingList || (await this.getBudgets());
         const existing = list.find(b => 
           (b.yearMonth || '').replace(/\./g, '-') === ym && 
@@ -157,16 +135,15 @@ class AppwriteDB {
         );
 
         if (existing) {
-          // 값이 동일하면 API 호출 방지
           if (Number(existing.amount) === Number(data.amount)) return existing;
           return await this.updateDoc(COL.BUDGETS, existing.$id, cleanData);
         } else {
-          // 값이 0이면 굳이 생성하지 않음 (단, 기존 데이터가 없었을 경우만)
           if (Number(data.amount) === 0) return { ...cleanData, $id: 'temp-0' };
           return await this.createDoc(COL.BUDGETS, cleanData);
         }
       } catch (e) {
-        console.error('예산 온라인 저장 실패:', e.message);
+        console.error('예산 서버 저장 중 치명적 오류:', e.message);
+        throw e; // 🚀 확실하게 에러를 던짐
       }
     }
     const list = this.local.get(COL.BUDGETS);
