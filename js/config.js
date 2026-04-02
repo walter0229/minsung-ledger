@@ -156,4 +156,4 @@ export const ACCOUNT_TYPES = [
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 // 앱 버전
-export const APP_VERSION = '1.025';
+export const APP_VERSION = '1.026';
