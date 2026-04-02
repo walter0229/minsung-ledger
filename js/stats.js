@@ -141,12 +141,12 @@ async function renderBudgetBars() {
     const pct = Math.min(Number(b.percent), 100);
     const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
     return `
-    <div class="budget-item" style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-      <span style="flex:0 0 75px; font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
-      <div class="progress-bg" style="flex:2; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden;">
+    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
+      <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden;">
         <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
       </div>
-      <span style="flex:1; text-align:right; font-size:11px; color:var(--text2); font-family:var(--font); font-weight:500;">
+      <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
         ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(b.amount).toLocaleString()}
       </span>
     </div>`;
