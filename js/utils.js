@@ -15,7 +15,6 @@ export const state = {
     theme: 'dark',
     reminderEnabled: false,
     reminderTime: '09:00',
-    pageThemes: {},
   },
   currentTab: 'home',
   currentMonth: new Date().toISOString().slice(0, 7),

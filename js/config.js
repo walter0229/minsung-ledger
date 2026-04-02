@@ -154,4 +154,4 @@ export const ACCOUNT_TYPES = [
 export const GEMINI_MODEL = 'gemini-3.0-flash';
 
 // 앱 버전
-export const APP_VERSION = '1.011';
+export const APP_VERSION = '1.012';
