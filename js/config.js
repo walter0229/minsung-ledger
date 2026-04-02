@@ -122,6 +122,7 @@ export const CATEGORIES = {
     { id: 'lotto', name: '로또', icon: 'lotto' },
   ],
   기타: [
+    { id: 'transport', name: '교통', icon: 'transport' },
     { id: 'shopping', name: '쇼핑', icon: 'shopping' },
     { id: 'loan', name: '대출', icon: 'loan' },
     { id: 'credit_card', name: '신용카드', icon: 'credit_card' },
