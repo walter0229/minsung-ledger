@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전
-export const APP_VERSION = '1.043';
+export const APP_VERSION = '1.044';
 
 export const state = {
   transactions: [],
@@ -109,17 +109,29 @@ export function getBudgetStatus(yearMonth) {
   const month = (yearMonth || '').replace(/\./g, '-');
   const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
   const txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+  
   return budgets.map(b => {
-    // 소분류 설정 지원에 맞춰, b.subCategory가 있으면 해당 서브카테고리 사용액, 없으면 main카테고리 사용액 산출
-    let used = 0;
-    if (b.subCategory) {
-      used = txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory).reduce((s, t) => s + Number(t.amount), 0);
-    } else {
-      used = txs.filter(t => t.mainCategory === b.category).reduce((s, t) => s + Number(t.amount), 0);
-    }
-    return { ...b, used, percent: b.amount > 0 ? (used / b.amount * 100).toFixed(1) : 0 };
+    let usedInVnd = 0;
+    const isSub = b.subCategory && b.subCategory !== "";
+    
+    txs.forEach(t => {
+      const matchCat = t.mainCategory === b.category;
+      // 소분류가 있는 예산이면 소분류까지 일치해야 하고, 대분류 예산이면 해당 카테고리 전체를 포함
+      if (matchCat) {
+        if (!isSub || (t.subCategory === b.subCategory)) {
+          usedInVnd += (t.vndAmt || Number(t.amount));
+        }
+      }
+    });
+
+    return { 
+      ...b, 
+      used: usedInVnd, 
+      percent: b.amount > 0 ? (usedInVnd / b.amount * 100).toFixed(1) : 0 
+    };
   });
 }
+
 
 // ── 카테고리별 지출 통계 ────────────────────
 export function getCategoryStats(txs) {

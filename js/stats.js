@@ -147,7 +147,7 @@ async function renderBudgetBars() {
     }
 
     // 🚀 전체 합계 계산 (대분류(Main) 항목 기준 - 중복 합계 방지)
-    const topLevelStatus = status.filter(b => !b.subCategory);
+    const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
     const totalBudgetSum = topLevelStatus.reduce((s, b) => s + (Number(b.amount) || 0), 0);
     const totalUsedSum = topLevelStatus.reduce((s, b) => s + b.usedVnd, 0);
     const totalPct = totalBudgetSum > 0 ? (totalUsedSum / totalBudgetSum * 100).toFixed(1) : 0;
@@ -245,7 +245,7 @@ export function renderReportScreen() {
 
 function renderAnalysisCharts() {
   const status = getBudgetStatus(state.currentMonth);
-  const labels = status.map(b => b.subCategory ? `${b.category}(${b.subCategory})` : b.category);
+  const labels = status.map(b => (b.subCategory && b.subCategory !== "") ? `${b.category}(${b.subCategory})` : b.category);
   const used = status.map(b => Number(b.used));
   const budget = status.map(b => Number(b.amount));
   const month = (state.currentMonth || '').replace(/\./g, '-');
@@ -271,7 +271,7 @@ function renderAnalysisCharts() {
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
   // 🚀 중복 합산 방지 (대분류만 필터링)
-  const topLevelStatus = status.filter(b => !b.subCategory);
+  const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
   const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
   const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
   const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
