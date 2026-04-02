@@ -10,9 +10,39 @@ class AppwriteDB {
     this.client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
     this.account = new window.Appwrite.Account(this.client);
     this.databases = new window.Appwrite.Databases(this.client);
+    this.online = true;
+
+    // 로컬 스토리지 데이터 초기화 (백업용)
+    this.local = {
+      get: (key) => JSON.parse(localStorage.getItem(`ledger_${key}`) || '[]'),
+      set: (key, val) => localStorage.setItem(`ledger_${key}`, JSON.stringify(val)),
+      create: (key, data, docId = null) => {
+        const list = this.local.get(key);
+        const newItem = { ...data, $id: docId || Date.now().toString(), $createdAt: new Date().toISOString() };
+        list.push(newItem);
+        this.local.set(key, list);
+        return newItem;
+      },
+      update: (key, id, data) => {
+        const list = this.local.get(key);
+        const idx = list.findIndex(i => i.$id === id);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...data, $updatedAt: new Date().toISOString() };
+          this.local.set(key, list);
+          return list[idx];
+        }
+        return null;
+      },
+      delete: (key, id) => {
+        const list = this.local.get(key);
+        const newList = list.filter(i => i.$id !== id);
+        this.local.set(key, newList);
+      }
+    };
   }
 
   async ensureSession() {
+    if (!this.online) return;
     try {
       await this.account.get();
     } catch {
@@ -20,266 +50,126 @@ class AppwriteDB {
         await this.account.createAnonymousSession();
       } catch (e) {
         console.warn('세션 생성 실패:', e.message);
-        throw e; // 상위로 에러를 던져야 거짓 성공 로그를 막을 수 있습니다.
+        this.online = false;
       }
     }
   }
 
+  // ── 공통 CRUD ──────────────────────────────
   async listDocs(colId, queries = []) {
-    return this.databases.listDocuments(DB_ID, colId, queries);
-  }
-
-  async getDoc(colId, docId) {
-    return this.databases.getDocument(DB_ID, colId, docId);
+    if (this.online) {
+      try {
+        return await this.databases.listDocuments(DB_ID, colId, queries);
+      } catch (e) {
+        console.warn(`${colId} 로드 실패:`, e.message);
+        this.online = false;
+      }
+    }
+    return { documents: this.local.get(colId) };
   }
 
   async createDoc(colId, data, docId = null) {
-    // 시스템 키 필터링
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
-    const id = docId || window.Appwrite.ID.unique();
-    return this.databases.createDocument(DB_ID, colId, id, cleanData);
+    if (this.online) {
+      try {
+        return await this.databases.createDocument(DB_ID, colId, docId || window.Appwrite.ID.unique(), cleanData);
+      } catch (e) { 
+        console.warn('온라인 생성 실패:', e.message);
+      }
+    }
+    return this.local.create(colId, cleanData, docId);
   }
 
   async updateDoc(colId, docId, data) {
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
-    return this.databases.updateDocument(DB_ID, colId, docId, cleanData);
+    if (this.online) {
+      try {
+        return await this.databases.updateDocument(DB_ID, colId, docId, cleanData);
+      } catch (e) {
+        console.warn('온라인 업데이트 실패:', e.message);
+      }
+    }
+    return this.local.update(colId, docId, cleanData);
   }
 
   async deleteDoc(colId, docId) {
-    return this.databases.deleteDocument(DB_ID, colId, docId);
-  }
-}
-
-// =============================================
-// LocalStorage 기반 로컬 DB (오프라인 fallback)
-// =============================================
-class LocalDB {
-  get(key) {
-    try { return JSON.parse(localStorage.getItem(key) || '[]'); }
-    catch { return []; }
-  }
-  set(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-  getOne(key, id) { return this.get(key).find(d => d.$id === id) || null; }
-
-  list(col) { return { documents: this.get(col), total: this.get(col).length }; }
-
-  create(col, data, id = null) {
-    const arr = this.get(col);
-    const doc = { $id: id || ('l' + Date.now()), $createdAt: new Date().toISOString(), ...data };
-    arr.push(doc);
-    this.set(col, arr);
-    return doc;
-  }
-
-  update(col, id, data) {
-    const arr = this.get(col).map(d => d.$id === id ? { ...d, ...data } : d);
-    this.set(col, arr);
-    return arr.find(d => d.$id === id);
-  }
-
-  delete(col, id) {
-    const arr = this.get(col).filter(d => d.$id !== id);
-    this.set(col, arr);
-  }
-}
-
-// =============================================
-// 통합 DB 레이어 (Appwrite 우선, 실패시 로컬)
-// =============================================
-class DB {
-  constructor() {
-    this.aw = new AppwriteDB();
-    this.local = new LocalDB();
-    this.online = false;
-    this.ready = new Promise((resolve) => {
-      this._resolveReady = resolve;
-    });
-    this.init();
-  }
-
-  async init() {
-    try {
-      await this.aw.ensureSession();
-      this.online = true;
-      console.log('✅ Appwrite 연결 성공');
-      await this.syncLocalToRemote();
-    } catch (e) {
-      console.warn('⚠️ 오프라인 모드:', e.message);
-      this.online = false;
-    } finally {
-      this._resolveReady();
-    }
-  }
-
-  async syncLocalToRemote() {
-    if (!this.online) return;
-    try {
-      // 로컬에만 있는 데이터 파악 (아이디가 l로 시작하거나 Appwrite에 없는 것들)
-      const collections = [COL.TRANSACTIONS, COL.ACCOUNTS, COL.BUDGETS];
-      for (const col of collections) {
-        const localItems = this.local.get(col);
-        if (localItems && localItems.length > 0) {
-          // 중복 방지: 서버 데이터를 받아서 체크 (여기서는 단순하게 전부 push, 차후 최적화 고려)
-          const serverItemsRes = await this.aw.listDocs(col);
-          const serverIds = (serverItemsRes.documents || []).map(d => d.$id);
-          
-          for (const item of localItems) {
-            if (!serverIds.includes(item.$id)) {
-              // _id 혹은 $가 붙은 Appwrite 시스템 필드는 제거 후 업로드
-              const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...uploadData } = item;
-              await this.aw.createDoc(col, uploadData, $id);
-            }
-          }
-        }
+    if (this.online) {
+      try {
+        await this.databases.deleteDocument(DB_ID, colId, docId);
+      } catch (e) {
+        console.warn('온라인 삭제 실패:', e.message);
       }
-    } catch (error) {
-       console.error('동기화 중 오류 발생:', error);
     }
+    this.local.delete(colId, docId);
   }
 
-  async listTransactions(queries = []) {
-    if (this.online) {
-      try {
-        const res = await this.aw.listDocs(COL.TRANSACTIONS, [
-          window.Appwrite.Query.orderDesc("date"),
-          window.Appwrite.Query.limit(500),
-          ...queries
-        ]);
-        return res.documents || [];
-      } catch { this.online = false; }
-    }
-    return this.local.get(COL.TRANSACTIONS).sort((a,b) => b.date?.localeCompare(a.date));
+  // ── 도메인 전용 메서드 ────────────────────────
+  async getAccounts() {
+    const res = await this.listDocs(COL.ACCOUNTS);
+    return res.documents || [];
   }
 
-  async createTransaction(data) {
-    if (this.online) {
-      try {
-        return await this.aw.createDoc(COL.TRANSACTIONS, data);
-      } catch { this.online = false; }
-    }
-    return this.local.create(COL.TRANSACTIONS, data);
+  async getTransactions() {
+    const res = await this.listDocs(COL.TRANSACTIONS, [
+      window.Appwrite.Query.orderDesc("date"),
+      window.Appwrite.Query.limit(1000)
+    ]);
+    return res.documents || [];
   }
 
-  async updateTransaction(id, data) {
-    if (this.online) {
-      try { return await this.aw.updateDoc(COL.TRANSACTIONS, id, data); }
-      catch { this.online = false; }
-    }
-    return this.local.update(COL.TRANSACTIONS, id, data);
-  }
-
-  async deleteTransaction(id) {
-    if (this.online) {
-      try { return await this.aw.deleteDoc(COL.TRANSACTIONS, id); }
-      catch { this.online = false; }
-    }
-    this.local.delete(COL.TRANSACTIONS, id);
-  }
-
-  async listAccounts() {
-    if (this.online) {
-      try {
-        const res = await this.aw.listDocs(COL.ACCOUNTS);
-        return res.documents || [];
-      } catch { this.online = false; }
-    }
-    return this.local.get(COL.ACCOUNTS);
-  }
-
-  async createAccount(data) {
-    let saved;
-    if (this.online) {
-      try { saved = await this.aw.createDoc(COL.ACCOUNTS, data); }
-      catch { this.online = false; }
-    }
-    if (!saved) {
-      saved = this.local.create(COL.ACCOUNTS, data);
-    } else {
-      // 온라인 생성 성공 시 로컬에도 해당 ID로 미러링 생성
-      this.local.create(COL.ACCOUNTS, data, saved.$id);
-    }
-    return saved;
-  }
-
-  async updateAccount(id, data) {
-    let updated;
-    if (this.online) {
-      try { updated = await this.aw.updateDoc(COL.ACCOUNTS, id, data); }
-      catch { this.online = false; }
-    }
-    const localUpdated = this.local.update(COL.ACCOUNTS, id, data);
-    return updated || localUpdated;
-  }
-
-  async deleteAccount(id) {
-    if (this.online) {
-      try { await this.aw.deleteDoc(COL.ACCOUNTS, id); }
-      catch { this.online = false; }
-    }
-    this.local.delete(COL.ACCOUNTS, id);
-  }
-
-  async listBudgets() {
-    if (this.online) {
-      try {
-        const res = await this.aw.listDocs(COL.BUDGETS);
-        return res.documents || [];
-      } catch { this.online = false; }
-    }
-    return this.local.get(COL.BUDGETS);
-  }
-
-  async saveBudget(data) {
-    const existing = (await this.listBudgets()).find(
-      b => b.category === data.category && b.yearMonth === data.yearMonth && b.subCategory === data.subCategory
-    );
-    if (existing) return this.updateBudget(existing.$id, data);
-
-    if (this.online) {
-      try { return await this.aw.createDoc(COL.BUDGETS, data); }
-      catch { this.online = false; }
-    }
-    return this.local.create(COL.BUDGETS, data);
-  }
-
-  async updateBudget(id, data) {
-    if (this.online) {
-      try { return await this.aw.updateDoc(COL.BUDGETS, id, data); }
-      catch { this.online = false; }
-    }
-    return this.local.update(COL.BUDGETS, id, data);
+  async getBudgets() {
+    const res = await this.listDocs(COL.BUDGETS);
+    return res.documents || [];
   }
 
   async getSettings() {
+    const res = await this.listDocs(COL.SETTINGS);
+    return (res.documents && res.documents[0]) || null;
+  }
+
+  async saveBudget(data) {
+    const ym = (data.yearMonth || '').replace(/\./g, '-');
+    const cleanData = { ...data, yearMonth: ym };
+
     if (this.online) {
       try {
-        const res = await this.aw.listDocs(COL.SETTINGS);
-        return res.documents?.[0] || null;
-      } catch { this.online = false; }
+        const q = [
+          window.Appwrite.Query.equal("yearMonth", ym),
+          window.Appwrite.Query.equal("category", data.category)
+        ];
+        if (data.subCategory) q.push(window.Appwrite.Query.equal("subCategory", data.subCategory));
+        else q.push(window.Appwrite.Query.isNull("subCategory"));
+
+        const existing = await this.listDocs(COL.BUDGETS, q);
+        if (existing.documents && existing.documents.length > 0) {
+          return await this.updateDoc(COL.BUDGETS, existing.documents[0].$id, cleanData);
+        } else {
+          return await this.createDoc(COL.BUDGETS, cleanData);
+        }
+      } catch (e) {
+        console.warn('예산 온라인 저장 실패:', e.message);
+      }
     }
-    const arr = this.local.get(COL.SETTINGS);
-    return arr[0] || null;
+
+    // 로컬 Upsert
+    const list = this.local.get(COL.BUDGETS);
+    const idx = list.findIndex(b => 
+      (b.yearMonth || '').replace(/\./g, '-') === ym && 
+      b.category === data.category && 
+      b.subCategory === data.subCategory
+    );
+    if (idx >= 0) {
+      return this.local.update(COL.BUDGETS, list[idx].$id, cleanData);
+    } else {
+      return this.local.create(COL.BUDGETS, cleanData);
+    }
   }
 
   async saveSettings(data) {
     const existing = await this.getSettings();
-    if (existing) {
-      if (this.online) {
-        try { return await this.aw.updateDoc(COL.SETTINGS, existing.$id, data); }
-        catch (e) {
-          console.warn('⚠️ 설정 업데이트 실패(온라인). Appwrite의 app-settings 컬렉션 Attributes에 geminiApiKey 등이 정의되어 있는지 확인하세요.', e.message);
-        }
-      }
-      return this.local.update(COL.SETTINGS, existing.$id, data);
-    }
-    if (this.online) {
-      try { return await this.aw.createDoc(COL.SETTINGS, data, 'global-settings'); }
-      catch (e) {
-        console.warn('⚠️ 설정 생성 실패(온라인). Appwrite의 app-settings 컬렉션 Attributes에 geminiApiKey 등이 정의되어 있는지 확인하세요.', e.message);
-      }
-    }
-    return this.local.create(COL.SETTINGS, data, 'global-settings');
+    if (existing) return await this.updateDoc(COL.SETTINGS, existing.$id, data);
+    return await this.createDoc(COL.SETTINGS, data, 'global-settings');
   }
 }
 
-export const db = new DB();
+export const db = new AppwriteDB();
