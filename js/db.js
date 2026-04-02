@@ -1,7 +1,7 @@
 import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DB_ID, COL } from './config.js';
 
 // =============================================
-// 민성이의 가계부 - Appwrite DB 레이어
+// 민성이의 가계부 - Appwrite DB 레이어 (복구 및 호환성 버전)
 // =============================================
 
 class AppwriteDB {
@@ -12,7 +12,6 @@ class AppwriteDB {
     this.databases = new window.Appwrite.Databases(this.client);
     this.online = true;
 
-    // 로컬 스토리지 데이터 초기화 (백업용)
     this.local = {
       get: (key) => JSON.parse(localStorage.getItem(`ledger_${key}`) || '[]'),
       set: (key, val) => localStorage.setItem(`ledger_${key}`, JSON.stringify(val)),
@@ -35,10 +34,12 @@ class AppwriteDB {
       },
       delete: (key, id) => {
         const list = this.local.get(key);
-        const newList = list.filter(i => i.$id !== id);
-        this.local.set(key, newList);
+        this.local.set(key, list.filter(i => i.$id !== id));
       }
     };
+
+    // 🚀 ready 프로미스 복구 (utils.js 호환)
+    this.ready = this.ensureSession();
   }
 
   async ensureSession() {
@@ -55,7 +56,6 @@ class AppwriteDB {
     }
   }
 
-  // ── 공통 CRUD ──────────────────────────────
   async listDocs(colId, queries = []) {
     if (this.online) {
       try {
@@ -73,9 +73,7 @@ class AppwriteDB {
     if (this.online) {
       try {
         return await this.databases.createDocument(DB_ID, colId, docId || window.Appwrite.ID.unique(), cleanData);
-      } catch (e) { 
-        console.warn('온라인 생성 실패:', e.message);
-      }
+      } catch (e) { console.warn('온라인 생성 실패:', e.message); }
     }
     return this.local.create(colId, cleanData, docId);
   }
@@ -85,25 +83,25 @@ class AppwriteDB {
     if (this.online) {
       try {
         return await this.databases.updateDocument(DB_ID, colId, docId, cleanData);
-      } catch (e) {
-        console.warn('온라인 업데이트 실패:', e.message);
-      }
+      } catch (e) { console.warn('온라인 업데이트 실패:', e.message); }
     }
     return this.local.update(colId, docId, cleanData);
   }
 
   async deleteDoc(colId, docId) {
     if (this.online) {
-      try {
-        await this.databases.deleteDocument(DB_ID, colId, docId);
-      } catch (e) {
-        console.warn('온라인 삭제 실패:', e.message);
-      }
+      try { await this.databases.deleteDocument(DB_ID, colId, docId); }
+      catch (e) { console.warn('온라인 삭제 실패:', e.message); }
     }
     this.local.delete(colId, docId);
   }
 
-  // ── 도메인 전용 메서드 ────────────────────────
+  // 🚀 utils.js 호환을 위한 레거시 명칭 API 복구
+  async listAccounts() { return this.getAccounts(); }
+  async listTransactions() { return this.getTransactions(); }
+  async listBudgets() { return this.getBudgets(); }
+
+  // 최신 도메인 메서드
   async getAccounts() {
     const res = await this.listDocs(COL.ACCOUNTS);
     return res.documents || [];
@@ -127,16 +125,13 @@ class AppwriteDB {
     return (res.documents && res.documents[0]) || null;
   }
 
+  // 예산 Upsert (저장/수정)
   async saveBudget(data) {
     const ym = (data.yearMonth || '').replace(/\./g, '-');
     const cleanData = { ...data, yearMonth: ym };
-
     if (this.online) {
       try {
-        const q = [
-          window.Appwrite.Query.equal("yearMonth", ym),
-          window.Appwrite.Query.equal("category", data.category)
-        ];
+        const q = [window.Appwrite.Query.equal("yearMonth", ym), window.Appwrite.Query.equal("category", data.category)];
         if (data.subCategory) q.push(window.Appwrite.Query.equal("subCategory", data.subCategory));
         else q.push(window.Appwrite.Query.isNull("subCategory"));
 
@@ -146,23 +141,12 @@ class AppwriteDB {
         } else {
           return await this.createDoc(COL.BUDGETS, cleanData);
         }
-      } catch (e) {
-        console.warn('예산 온라인 저장 실패:', e.message);
-      }
+      } catch (e) { console.warn('예산 온라인 저장 실패:', e.message); }
     }
-
-    // 로컬 Upsert
     const list = this.local.get(COL.BUDGETS);
-    const idx = list.findIndex(b => 
-      (b.yearMonth || '').replace(/\./g, '-') === ym && 
-      b.category === data.category && 
-      b.subCategory === data.subCategory
-    );
-    if (idx >= 0) {
-      return this.local.update(COL.BUDGETS, list[idx].$id, cleanData);
-    } else {
-      return this.local.create(COL.BUDGETS, cleanData);
-    }
+    const idx = list.findIndex(b => (b.yearMonth || '').replace(/\./g, '-') === ym && b.category === data.category && b.subCategory === data.subCategory);
+    if (idx >= 0) return this.local.update(COL.BUDGETS, list[idx].$id, cleanData);
+    else return this.local.create(COL.BUDGETS, cleanData);
   }
 
   async saveSettings(data) {
@@ -170,6 +154,16 @@ class AppwriteDB {
     if (existing) return await this.updateDoc(COL.SETTINGS, existing.$id, data);
     return await this.createDoc(COL.SETTINGS, data, 'global-settings');
   }
+
+  // 거래 관련 호환성
+  async createTransaction(d) { return this.createDoc(COL.TRANSACTIONS, d); }
+  async updateTransaction(id, d) { return this.updateDoc(COL.TRANSACTIONS, id, d); }
+  async deleteTransaction(id) { return this.deleteDoc(COL.TRANSACTIONS, id); }
+  
+  // 계좌 관련 호환성
+  async createAccount(d) { return this.createDoc(COL.ACCOUNTS, d); }
+  async updateAccount(id, d) { return this.updateDoc(COL.ACCOUNTS, id, d); }
+  async deleteAccount(id) { return this.deleteDoc(COL.ACCOUNTS, id); }
 }
 
 export const db = new AppwriteDB();
