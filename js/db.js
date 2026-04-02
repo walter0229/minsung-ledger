@@ -75,10 +75,19 @@ class AppwriteDB {
   async createDoc(colId, data, docId = null) {
     await this.ready;
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
+    
     if (this.online) {
       try {
-        return await this.databases.createDocument(DB_ID, colId, docId || window.Appwrite.ID.unique(), cleanData);
-      } catch (e) { console.warn('온라인 생성 실패:', e.message); }
+        // 🚀 익명 사용자라도 본인의 데이터는 확실히 읽고 쓸 수 있도록 권한 부여
+        const user = await this.account.get();
+        const perms = [
+          window.Appwrite.Permission.read(window.Appwrite.Role.user(user.$id)),
+          window.Appwrite.Permission.write(window.Appwrite.Role.user(user.$id)),
+        ];
+        return await this.databases.createDocument(DB_ID, colId, docId || window.Appwrite.ID.unique(), cleanData, perms);
+      } catch (e) { 
+        console.warn('온라인 생성 실패(권한 혹은 네트워크):', e.message);
+      }
     }
     return this.local.create(colId, cleanData, docId);
   }
@@ -170,12 +179,6 @@ class AppwriteDB {
     return await this.createDoc(COL.SETTINGS, data, 'global-settings');
   }
 
-  // 거래 관련 호환성
-  async createTransaction(d) { return this.createDoc(COL.TRANSACTIONS, d); }
-  async createTransaction(d) { await this.ready; return this.createDoc(COL.TRANSACTIONS, d); }
-  async updateTransaction(id, d) { await this.ready; return this.updateDoc(COL.TRANSACTIONS, id, d); }
-  async deleteTransaction(id) { await this.ready; return this.deleteDoc(COL.TRANSACTIONS, id); }
-  
   // 계좌 관련 호환성
   async createAccount(d) { await this.ready; return this.createDoc(COL.ACCOUNTS, d); }
   async updateAccount(id, d) { await this.ready; return this.updateDoc(COL.ACCOUNTS, id, d); }
