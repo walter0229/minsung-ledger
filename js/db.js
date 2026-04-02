@@ -129,19 +129,26 @@ class AppwriteDB {
   async saveBudget(data) {
     const ym = (data.yearMonth || '').replace(/\./g, '-');
     const cleanData = { ...data, yearMonth: ym };
+
     if (this.online) {
       try {
-        const q = [window.Appwrite.Query.equal("yearMonth", ym), window.Appwrite.Query.equal("category", data.category)];
-        if (data.subCategory) q.push(window.Appwrite.Query.equal("subCategory", data.subCategory));
-        else q.push(window.Appwrite.Query.isNull("subCategory"));
+        // 🚀 인덱스 의존성을 없애기 위해 전체 목록에서 필터링하는 안전한 방식으로 변경
+        const res = await this.listDocs(COL.BUDGETS);
+        const list = res.documents || [];
+        const existing = list.find(b => 
+          (b.yearMonth || '').replace(/\./g, '-') === ym && 
+          b.category === data.category && 
+          b.subCategory === data.subCategory
+        );
 
-        const existing = await this.listDocs(COL.BUDGETS, q);
-        if (existing.documents && existing.documents.length > 0) {
-          return await this.updateDoc(COL.BUDGETS, existing.documents[0].$id, cleanData);
+        if (existing) {
+          return await this.updateDoc(COL.BUDGETS, existing.$id, cleanData);
         } else {
           return await this.createDoc(COL.BUDGETS, cleanData);
         }
-      } catch (e) { console.warn('예산 온라인 저장 실패:', e.message); }
+      } catch (e) {
+        console.warn('예산 온라인 저장 실패(인덱스 혹은 권한 문제), 로컬 저장 유지:', e.message);
+      }
     }
     const list = this.local.get(COL.BUDGETS);
     const idx = list.findIndex(b => (b.yearMonth || '').replace(/\./g, '-') === ym && b.category === data.category && b.subCategory === data.subCategory);
