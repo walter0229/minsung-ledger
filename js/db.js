@@ -59,10 +59,13 @@ class AppwriteDB {
   async listDocs(colId, queries = []) {
     if (this.online) {
       try {
-        return await this.databases.listDocuments(DB_ID, colId, queries);
+        // 🚀 데이터 누락 방지를 위해 기본 limit 상향
+        const finalQueries = [...queries, window.Appwrite.Query.limit(5000)];
+        return await this.databases.listDocuments(DB_ID, colId, finalQueries);
       } catch (e) {
         console.warn(`${colId} 로드 실패:`, e.message);
         this.online = false;
+        if(window.toast) window.toast('⚠️ 클라우드 연결 실패! 오프라인 모드로 앱을 시작합니다.', 'error');
       }
     }
     return { documents: this.local.get(colId) };
@@ -147,7 +150,8 @@ class AppwriteDB {
           return await this.createDoc(COL.BUDGETS, cleanData);
         }
       } catch (e) {
-        console.warn('예산 온라인 저장 실패(인덱스 혹은 권한 문제), 로컬 저장 유지:', e.message);
+        console.error('예산 온라인 저장 실패:', e.message);
+        if(window.toast) window.toast('🔴 예산 서버 저장 실패! (데이터는 임시 저장됨)', 'error');
       }
     }
     const list = this.local.get(COL.BUDGETS);
