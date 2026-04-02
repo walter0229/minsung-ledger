@@ -146,9 +146,10 @@ async function renderBudgetBars() {
       status.push({ ...b, usedVnd: usedInVnd, percent: bAmount > 0 ? (usedInVnd / bAmount * 100).toFixed(1) : 0 });
     }
 
-    // 🚀 전체 합계 계산 (전체 예산 요약)
-    const totalBudgetSum = status.reduce((s, b) => s + (Number(b.amount) || 0), 0);
-    const totalUsedSum = status.reduce((s, b) => s + b.usedVnd, 0);
+    // 🚀 전체 합계 계산 (대분류(Main) 항목 기준 - 중복 합계 방지)
+    const topLevelStatus = status.filter(b => !b.subCategory);
+    const totalBudgetSum = topLevelStatus.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+    const totalUsedSum = topLevelStatus.reduce((s, b) => s + b.usedVnd, 0);
     const totalPct = totalBudgetSum > 0 ? Math.min((totalUsedSum / totalBudgetSum * 100), 100).toFixed(1) : 0;
 
     let summaryHtml = `
