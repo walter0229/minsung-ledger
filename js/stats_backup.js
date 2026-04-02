@@ -1,4 +1,4 @@
-import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini } from './utils.js';
+﻿import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini } from './utils.js';
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
@@ -24,11 +24,9 @@ export function setStatsType(t, btn) {
 
 function getStatsTxs() {
   const now = new Date();
-  if (store.statsPeriod === 'monthly') {
-    const month = state.currentMonth; // YYYY-MM
-    return state.transactions.filter(t => t.date?.startsWith(month) && t.type === store.statsType);
-  }
-  // 주간 (현재 주)
+  if (store.statsPeriod === 'monthly') return state.transactions.filter(t => t.date?.startsWith(state.currentMonth) && t.type === store.statsType);
+  if (store.statsPeriod === 'yearly') return state.transactions.filter(t => t.date?.startsWith(String(now.getFullYear())) && t.type === store.statsType);
+  // weekly
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
   const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
@@ -123,62 +121,36 @@ async function renderBudgetBars() {
   
   const baseCur = 'VND';
   const status = [];
-  
-  try {
-    const rates = await fetchExchangeRates(baseCur);
 
-    for (const b of budgets) {
-      let usedInVnd = 0;
-      const filterTxs = b.subCategory 
-        ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
-        : txs.filter(t => t.mainCategory === b.category);
+  for (const b of budgets) {
+    let usedInVnd = 0;
+    const filterTxs = b.subCategory 
+      ? txs.filter(t => t.mainCategory === b.category && t.subCategory === b.subCategory)
+      : txs.filter(t => t.mainCategory === b.category);
 
-      for (const t of filterTxs) {
-        const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
-        const cur = acc?.currency || 'VND';
-        const rate = (cur === baseCur) ? 1 : (rates[cur] ? 1/rates[cur] : 1);
-        usedInVnd += Number(t.amount) * rate;
-      }
-      
-      const bAmount = Number(b.amount) || 0;
-      status.push({ ...b, usedVnd: usedInVnd, percent: bAmount > 0 ? (usedInVnd / bAmount * 100).toFixed(1) : 0 });
+    for (const t of filterTxs) {
+      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+      const cur = acc?.currency || 'VND';
+      usedInVnd += await convertCurrency(Number(t.amount), cur, baseCur);
     }
+    
+    status.push({ ...b, usedVnd: usedInVnd, percent: b.amount > 0 ? (usedInVnd / b.amount * 100).toFixed(1) : 0 });
+  }
 
-    // 🚀 전체 합계 계산 (전체 예산 요약)
-    const totalBudgetSum = status.reduce((s, b) => s + (Number(b.amount) || 0), 0);
-    const totalUsedSum = status.reduce((s, b) => s + b.usedVnd, 0);
-    const totalPct = totalBudgetSum > 0 ? Math.min((totalUsedSum / totalBudgetSum * 100), 100).toFixed(1) : 0;
-
-    let summaryHtml = `
-    <div class="budget-item total-summary" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; padding:12px; background:rgba(124,106,247,0.1); border-radius:12px; border:1px solid rgba(124,106,247,0.3);">
-      <span style="flex:0 0 110px; font-size:13px; font-weight:800; color:var(--accent2);">전체 합계</span>
-      <div class="progress-bg" style="flex:1; height:12px; margin-bottom:0; background:var(--bg3); border-radius:6px; overflow:hidden; position:relative;">
-        <div class="progress-bar" style="width:${totalPct}%; height:100%; border-radius:6px; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.5s;"></div>
-        <span style="position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:9px; font-weight:900; color:white; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${totalPct}%</span>
+  el.innerHTML = status.map(b => {
+    const pct = Math.min(Number(b.percent), 100);
+    const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
+    return `
+    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
+      <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden;">
+        <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
       </div>
-      <span style="flex:1.2; text-align:right; font-size:12px; color:var(--text); font-weight:700;">
-        ${Math.round(totalUsedSum).toLocaleString()} / ${Math.round(totalBudgetSum).toLocaleString()}
+      <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
+        ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(b.amount).toLocaleString()}
       </span>
     </div>`;
-
-    el.innerHTML = summaryHtml + status.map(b => {
-      const pct = Math.min(Number(b.percent), 100);
-      const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
-      return `
-      <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:4px;">
-        <span style="flex:0 0 110px; font-size:11px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text);">${title}</span>
-        <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
-          <div class="progress-bar" style="width:${pct}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
-        </div>
-        <span style="flex:0 0 35px; font-size:10px; font-weight:700; color:${pct>90?'var(--expense)':'var(--text2)'}; text-align:center; margin-left:2px;">${Number(b.percent).toFixed(0)}%</span>
-        <span style="flex:1.2; text-align:right; font-size:10.5px; color:var(--text2); font-family:var(--font); font-weight:500;">
-          ${Math.round(b.usedVnd).toLocaleString()} / ${Math.round(Number(b.amount) || 0).toLocaleString()}
-        </span>
-      </div>`;
-    }).join('');
-  } catch (err) {
-    console.error('예산 데이터 렌더링 실패:', err);
-  }
+  }).join('');
 }
 
 // ─────────────────────────────────────────────
@@ -243,9 +215,6 @@ export async function sendAiMsg() {
 window.sendAiMsg = sendAiMsg;
 window.renderStats = renderStatsScreen;
 window.renderReport = renderReportScreen;
-window.calPrevMonth = calPrevMonth;
-window.calNextMonth = calNextMonth;
-window.showCalDetail = showCalDetail;
 
 export function renderReportScreen() {
   renderAnalysisCharts();
@@ -269,13 +238,14 @@ function renderAnalysisCharts() {
         labels,
         datasets: [
           { label: '예산', data: budget, backgroundColor: 'rgba(124,106,247,0.2)', borderColor: 'rgba(124,106,247,0.6)', borderWidth: 1 },
-          { label: '지출', data: used, backgroundColor: used.map((u, i) => u > budget[i] ? 'rgba(248,113,113,0.7)' : 'rgba(52,211,153,0.7)'), borderWidth: 0 }
+          { label: '사용', data: used, backgroundColor: used.map((u, i) => u > budget[i] ? 'rgba(248,113,113,0.7)' : 'rgba(52,211,153,0.7)'), borderWidth: 0 }
         ]
       },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9090b0', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }, y: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } } } }
     });
   }
 
+  // 시간 경과율 차트
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
   const totalBudget = budget.reduce((s, v) => s + v, 0);
@@ -306,27 +276,68 @@ function renderAnalysisCharts() {
 }
 
 function renderAssetChart() {
-  const accounts = state.accounts;
-  const labels = accounts.map(a => a.name);
-  const data = accounts.map(a => Number(a.initialBalance)); // 단순 초기화
-  const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
-
   if (store.assetChart) store.assetChart.destroy();
   const ctx = document.getElementById('assetChart').getContext('2d');
-  
+  const now = new Date();
+  let labels = [], data = [];
+
+  // TODO: getTotalBalanceInBase() 를 통한 다중 통화 통합은
+  // 복잡성을 피하기 위해 여기서는 단순 로직 유지 혹은 환율 모듈 적용 시 수정 가능
+  if (store.reportPeriod === 'monthly') {
+    for (let d = 1; d <= getDaysInMonth(now.getFullYear(), now.getMonth()); d++) {
+      const dateStr = `${state.currentMonth}-${String(d).padStart(2, '0')}`;
+      labels.push(d + '일');
+      const txsUntil = state.transactions.filter(t => t.date?.slice(0, 10) <= dateStr);
+      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
+      data.push(initBal + inc - exp);
+    }
+  } else if (store.reportPeriod === 'yearly') {
+    for (let m = 1; m <= 12; m++) {
+      const ym = `${now.getFullYear()}-${String(m).padStart(2, '0')}`;
+      labels.push(m + '월');
+      const txsUntil = state.transactions.filter(t => t.date?.startsWith(String(now.getFullYear())) && t.date?.slice(0, 7) <= ym);
+      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
+      data.push(initBal + inc - exp);
+    }
+  } else {
+    // weekly
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      labels.push(['월','화','수','목','금','토','일'][i]);
+      const txsUntil = state.transactions.filter(t => t.date?.slice(0, 10) <= dateStr);
+      const inc = txsUntil.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txsUntil.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+      const initBal = state.accounts.reduce((s, a) => s + (Number(a.initialBalance) || 0), 0);
+      data.push(initBal + inc - exp);
+    }
+  }
+
   if(window.Chart) {
     store.assetChart = new window.Chart(ctx, {
-      type: 'bar',
+      type: 'line',
       data: {
         labels,
-        datasets: [{ label: '자산', data, backgroundColor: colors.slice(0, data.length) }]
+        datasets: [{
+          label: '총 자산 흐름',
+          data,
+          borderColor: '#7c6af7',
+          backgroundColor: 'rgba(124,106,247,0.1)',
+          fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#7c6af7'
+        }]
       },
       options: {
-        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { ticks: { color: '#5a5a78' } },
-          y: { ticks: { color: '#9090b0' } }
+          x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } },
+          y: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }
         }
       }
     });
@@ -351,7 +362,7 @@ export async function renderCalendarScreen() {
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
 
-  let monthlyCumulativeNet = 0;
+  let monthlyCumulativeNet = 0; // 매달 1일 0원부터 시작
 
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
 
@@ -371,6 +382,7 @@ export async function renderCalendarScreen() {
     monthlyCumulativeNet += dayNet;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
+    // 칸이 좁으므로 수치를 작게 표시
     const fInc = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
     const fExp = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
     const fNet = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
