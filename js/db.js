@@ -266,13 +266,17 @@ class DB {
     if (existing) {
       if (this.online) {
         try { return await this.aw.updateDoc(COL.SETTINGS, existing.$id, data); }
-        catch {}
+        catch (e) {
+          console.warn('⚠️ 설정 업데이트 실패(온라인). Appwrite의 app-settings 컬렉션 Attributes에 geminiApiKey 등이 정의되어 있는지 확인하세요.', e.message);
+        }
       }
       return this.local.update(COL.SETTINGS, existing.$id, data);
     }
     if (this.online) {
       try { return await this.aw.createDoc(COL.SETTINGS, data, 'global-settings'); }
-      catch {}
+      catch (e) {
+        console.warn('⚠️ 설정 생성 실패(온라인). Appwrite의 app-settings 컬렉션 Attributes에 geminiApiKey 등이 정의되어 있는지 확인하세요.', e.message);
+      }
     }
     return this.local.create(COL.SETTINGS, data, 'global-settings');
   }
