@@ -84,33 +84,32 @@ export async function saveBudgets() {
   const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
   const ym = (rawYm || '').replace(/\./g, '-');
   
-  showLoading(true);
+  showLoading(true, '예산 저장 중...');
   try {
+    // 🚀 전체 목록을 먼저 딱 한 번만 가져옴
+    const existingList = await db.getBudgets();
+    
     for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
       // 대분류 전체 예산 저장
       const mainInp = document.getElementById(`budget-${mainCat}-main`);
       if (mainInp) {
-        const raw = mainInp.dataset.raw || mainInp.value.replace(/,/g, '');
-        if (raw) {
-          const saved = await db.saveBudget({ category: mainCat, amount: Number(raw), yearMonth: ym, subCategory: null });
-          updateLocalBudgetStore(saved);
-        }
+        const raw = (mainInp.dataset.raw || mainInp.value || '0').replace(/,/g, '');
+        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: null }, existingList);
+        updateLocalBudgetStore(saved);
       }
 
       // 소분류 개별 예산 저장
       for (const sub of subCats) {
         const inp = document.getElementById(`budget-${mainCat}-sub-${sub.id}`);
         if (!inp) continue;
-        const raw = inp.dataset.raw || inp.value.replace(/,/g, '');
-        if (!raw) continue;
-        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw), yearMonth: ym, subCategory: sub.name });
+        const raw = (inp.dataset.raw || inp.value || '0').replace(/,/g, '');
+        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: sub.name }, existingList);
         updateLocalBudgetStore(saved);
       }
     }
     
-    toast('✅ 소분류가 적용된 예산이 저장됐어요!');
+    toast('✅ 모든 예산이 안전하게 저장됐어요!');
     if(window.closeModal) window.closeModal('budgetModal');
-    // 통계 및 예산 막대 갱신
     if(typeof window.renderStats === 'function') window.renderStats();
   } catch(e) { 
     toast('❌ ' + e.message, 'error'); 

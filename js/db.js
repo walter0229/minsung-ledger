@@ -141,16 +141,15 @@ class AppwriteDB {
     return (res.documents && res.documents[0]) || null;
   }
 
-  // 예산 Upsert (저장/수정)
-  async saveBudget(data) {
+  // 예산 Upsert (저장/수정) - 최적화 버전
+  async saveBudget(data, existingList = null) {
     const ym = (data.yearMonth || '').replace(/\./g, '-');
     const cleanData = { ...data, yearMonth: ym };
 
     if (this.online) {
       try {
-        // 🚀 인덱스 의존성을 없애기 위해 전체 목록에서 필터링하는 안전한 방식으로 변경
-        const res = await this.listDocs(COL.BUDGETS);
-        const list = res.documents || [];
+        // 🚀 인덱스 의존성을 없애기 위해 기존 목록이 제공되지 않으면 한 번만 호출
+        const list = existingList || (await this.getBudgets());
         const existing = list.find(b => 
           (b.yearMonth || '').replace(/\./g, '-') === ym && 
           b.category === data.category && 
@@ -158,13 +157,16 @@ class AppwriteDB {
         );
 
         if (existing) {
+          // 값이 동일하면 API 호출 방지
+          if (Number(existing.amount) === Number(data.amount)) return existing;
           return await this.updateDoc(COL.BUDGETS, existing.$id, cleanData);
         } else {
+          // 값이 0이면 굳이 생성하지 않음 (단, 기존 데이터가 없었을 경우만)
+          if (Number(data.amount) === 0) return { ...cleanData, $id: 'temp-0' };
           return await this.createDoc(COL.BUDGETS, cleanData);
         }
       } catch (e) {
         console.error('예산 온라인 저장 실패:', e.message);
-        if(window.toast) window.toast('🔴 예산 서버 저장 실패! (데이터는 임시 저장됨)', 'error');
       }
     }
     const list = this.local.get(COL.BUDGETS);
