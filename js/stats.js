@@ -1,4 +1,4 @@
-import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth } from './utils.js';
+import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini } from './utils.js';
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
@@ -162,6 +162,59 @@ export function setReportPeriod(p, btn) {
   btn.classList.add('active');
   window.renderReport();
 }
+
+// ─────────────────────────────────────────────
+// AI 금융 비서 구현
+// ─────────────────────────────────────────────
+export async function sendAiMsg() {
+  const inputEl = document.getElementById('aiInput');
+  const msgEl = document.getElementById('aiMsg');
+  if (!inputEl || !msgEl) return;
+
+  const userQuery = inputEl.value.trim();
+  if (!userQuery) return;
+
+  const apiKey = state.settings.geminiApiKey;
+  if (!apiKey) {
+    msgEl.innerHTML = '⚠️ 설정에서 <b>Gemini API Key</b>를 먼저 입력해주세요.<br><br><small>설정 탭 하단에서 API 키를 저장할 수 있습니다.</small>';
+    return;
+  }
+
+  // 데이터 컨텍스트 구성
+  const accountCtx = state.accounts.map(a => `${a.name}: ${Math.round(a.initialBalance).toLocaleString()} ${a.currency || 'VND'}`).join(', ');
+  const budgetStatus = getBudgetStatus(state.currentMonth);
+  const budgetCtx = budgetStatus.map(b => `${b.category}: ${Math.round(b.used).toLocaleString()} / ${Math.round(b.amount).toLocaleString()}`).join(', ');
+  const recentTxs = state.transactions.slice(0, 10).map(t => `${t.date} ${t.type === 'income' ? '수입' : '지출'} ${t.merchant || ''} ${Math.round(t.amount).toLocaleString()}`).join(', ');
+
+  const prompt = `사용자의 금융 가계부 데이터를 바탕으로 질문에 친절하고 전문적으로 답변해줘.
+
+현재 계좌 상황: ${accountCtx}
+이번 달 예산 현황: ${budgetCtx}
+최근 거래(10건): ${recentTxs}
+
+사용자 질문: ${userQuery}
+
+한국어로 답변해주고, 가능한 구체적인 수치나 분석을 포함해줘.`;
+
+  try {
+    msgEl.innerHTML = '🤖 <b>AI 비서가 데이터를 분석 중입니다...</b><br><small>잠시만 기다려주세요.</small>';
+    inputEl.value = '';
+    
+    const response = await callGemini(prompt);
+    
+    // 마크다운 줄바꿈 처리 등을 위한 간단한 변환
+    const formatted = response.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    msgEl.innerHTML = formatted;
+  } catch (e) {
+    console.error('AI 비서 오류:', e);
+    msgEl.innerHTML = `⚠️ <b>AI 분석 중 오류가 발생했습니다.</b><br><small>${e.message}</small>`;
+  }
+}
+
+// 윈도우 전역 함수로 등록 (HTML 호출용)
+window.sendAiMsg = sendAiMsg;
+window.renderStats = renderStatsScreen;
+window.renderReport = renderReportScreen;
 
 export function renderReportScreen() {
   renderAnalysisCharts();
