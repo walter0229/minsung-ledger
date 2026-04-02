@@ -242,22 +242,21 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .cal-day-label { text-align: center; font-size: 11px; color: var(--text3); padding: 4px 0; font-weight: 600; }
 .cal-cell {
-  min-height: 85px; display: flex; flex-direction: column; align-items: center;
-  justify-content: flex-start; border-radius: 10px; cursor: pointer; gap: 2px; padding: 4px 2px;
+  min-height: 72px; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; border-radius: 10px; cursor: pointer; gap: 1px; padding: 4px 2px;
   transition: background 0.15s; position: relative; overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.02);
 }
 .cal-cell:hover { background: var(--bg3); }
 .cal-cell.today { background: var(--accent) !important; color: white !important; }
-.cal-num { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.cal-num { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 
-.cal-daily-stats { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; gap: 1.5px; }
-.cal-inc-txt { font-size: 8px; font-weight: 700; color: #fbbf24; white-space: nowrap; }
-.cal-exp-txt { font-size: 8px; font-weight: 700; color: #60a5fa; white-space: nowrap; }
-.cal-net-txt { font-size: 8px; font-weight: 800; width: 85%; text-align: center; }
+.cal-daily-stats { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; gap: 1px; }
+.cal-inc-txt { font-size: 8.5px; font-weight: 700; color: #fbbf24; white-space: nowrap; }
+.cal-exp-txt { font-size: 8.5px; font-weight: 700; color: #60a5fa; white-space: nowrap; }
+.cal-net-txt { font-size: 9px; font-weight: 900; width: 90%; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 1px; padding-top: 1px; }
 .cal-net-txt.pos { color: #34d399; }
 .cal-net-txt.neg { color: #f87171; }
-.cal-cum-txt { font-size: 8.5px; font-weight: 900; color: var(--text1); border-top: 1px solid rgba(255,255,255,0.1); width: 90%; text-align: center; padding-top: 2px; margin-top: 1px; }
 
 /* ── 달력 하단 상세 ─────────────────────── */
 .cal-detail { margin: 14px 0 0; padding: 14px; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); }

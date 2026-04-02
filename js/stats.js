@@ -309,8 +309,7 @@ export async function renderCalendarScreen() {
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
 
-  const firstOfMonth = `${ym}-01`;
-  let runningBal = await getBalanceAtDate(firstOfMonth, baseCur);
+  let monthlyCumulativeNet = 0; // 매달 1일 0원부터 시작
 
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
 
@@ -318,7 +317,6 @@ export async function renderCalendarScreen() {
     const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
     const dayTxs = txs.filter(t => t.date?.slice(0, 10) === dateStr);
     
-    let dayInc = 0, dayExp = 0;
     for (const t of dayTxs) {
       const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
       const cur = acc?.currency || 'VND';
@@ -327,21 +325,20 @@ export async function renderCalendarScreen() {
       if (t.type === 'expense') dayExp += conv;
     }
     const dayNet = dayInc - dayExp;
-    runningBal += dayNet;
+    monthlyCumulativeNet += dayNet;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
-    // 칸이 좁으므로 세 자릿수 콤마 없이 정수로만 표시하거나 축약 가능. 대개 콤마 없이 표시
-    const f = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fNet = (v) => v !== 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fBal = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
+    // 칸이 좁으므로 수치를 작게 표시
+    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
+    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
+    const fNet = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
 
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
       <div class="cal-num">${day}</div>
       <div class="cal-daily-stats">
-        ${dayInc > 0 ? `<div class="cal-inc-txt">${f(dayInc)}</div>` : ''}
-        ${dayExp > 0 ? `<div class="cal-exp-txt">${f(dayExp)}</div>` : ''}
-        <div class="cal-net-txt ${dayNet > 0 ? 'pos' : dayNet < 0 ? 'neg' : ''}">${fNet(dayNet)}</div>
-        <div class="cal-cum-txt">${fBal(runningBal)}</div>
+        ${dayInc > 0 ? `<div class="cal-inc-txt">${fInc(dayInc)}</div>` : ''}
+        ${dayExp > 0 ? `<div class="cal-exp-txt">${fExp(dayExp)}</div>` : ''}
+        <div class="cal-net-txt ${monthlyCumulativeNet > 0 ? 'pos' : monthlyCumulativeNet < 0 ? 'neg' : ''}">${fNet(monthlyCumulativeNet)}</div>
       </div>
     </div>`;
   }
