@@ -52,6 +52,7 @@ async function renderMonthSummary() {
     
     // 환율 변환 후 합산
     const inVND = await convertCurrency(amt, cur, baseCur);
+    t.vndAmt = inVND; 
     if (t.type === 'income') incomeInVND += inVND;
     else if (t.type === 'expense') expenseInVND += inVND;
   }

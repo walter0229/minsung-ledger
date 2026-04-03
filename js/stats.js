@@ -222,6 +222,21 @@ export function renderReportScreen() {
 }
 
 function renderAnalysisCharts() {
+  const baseCur = 'VND';
+  const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  
+  // 환율 데이터 보장
+  (async () => {
+    for (const t of txs) {
+      const acc = findAccount(t.accountId || t.fromAccountId);
+      const cur = acc?.currency || 'VND';
+      t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
+    }
+    continueRenderAnalysisCharts();
+  })();
+}
+
+function continueRenderAnalysisCharts() {
   const status = getBudgetStatus(state.currentMonth);
   // 대분류별로 그룹화 (여러 개의 소분류 예산이 있을 경우 합산)
   const catMap = {};
