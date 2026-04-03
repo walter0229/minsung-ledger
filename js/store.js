@@ -18,4 +18,5 @@ export const store = {
   usageChart: null,
   progressChart: null,
   assetChart: null,
+  balanceTrendChart: null,
 };

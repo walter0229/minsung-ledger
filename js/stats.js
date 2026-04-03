@@ -219,6 +219,7 @@ export async function sendAiMsg() {
 export async function renderReportScreen() {
   await renderAnalysisCharts();
   await renderAssetChart();
+  await renderBalanceTrendChart();
 }
 
 async function renderAnalysisCharts() {
@@ -357,6 +358,79 @@ async function renderAssetChart() {
       }
     });
   }
+}
+
+async function renderBalanceTrendChart() {
+  const baseCur = 'VND';
+  const [y, m] = state.currentMonth.split('-').map(Number);
+  const today = new Date();
+  // 이번 달 1일부터 오늘(또는 말일)까지 날짜 목록 생성
+  const lastDay = (today.getFullYear() === y && today.getMonth() + 1 === m)
+    ? today.getDate()
+    : new Date(y, m, 0).getDate();
+
+  const labels = [];
+  const dataPoints = [];
+
+  for (let day = 1; day <= lastDay; day++) {
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    labels.push(`${m}/${day}`);
+
+    // 해당 날짜 이전까지의 모든 거래 누적 잔액 계산
+    let totalVND = 0;
+    for (const acc of state.accounts) {
+      const cur = acc.currency || 'VND';
+      let bal = Number(acc.initialBalance) || 0;
+      for (const t of state.transactions) {
+        const tDate = (t.date || '').slice(0, 10);
+        if (tDate > dateStr) continue;
+        if (t.type === 'income' && t.accountId === acc.$id) bal += Number(t.amount);
+        if (t.type === 'expense' && t.accountId === acc.$id) bal -= Number(t.amount);
+        if (t.type === 'transfer') {
+          if (t.fromAccountId === acc.$id) bal -= Number(t.amount);
+          if (t.toAccountId === acc.$id) bal += Number(t.targetAmount || t.amount);
+        }
+      }
+      const inVND = await convertCurrency(bal, cur, baseCur);
+      if (acc.type === 'loan') totalVND -= Math.abs(inVND);
+      else totalVND += inVND;
+    }
+    dataPoints.push(Math.round(totalVND));
+  }
+
+  if (store.balanceTrendChart) store.balanceTrendChart.destroy();
+  const ctx = document.getElementById('balanceTrendChart');
+  if (!ctx || !window.Chart) return;
+
+  store.balanceTrendChart = new window.Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '총 잔액 (VND)',
+        data: dataPoints,
+        borderColor: '#7c6af7',
+        backgroundColor: 'rgba(124,106,247,0.12)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#a78bfa',
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${Math.round(ctx.raw).toLocaleString()} VND` } }
+      },
+      scales: {
+        x: { ticks: { color: '#9090b0', font: { size: 9 }, maxTicksLimit: 10 }, grid: { color: '#2e2e3e' } },
+        y: { ticks: { color: '#9090b0', font: { size: 9 }, callback: v => (v/1000000).toFixed(0) + 'M' }, grid: { color: '#2e2e3e' } }
+      }
+    }
+  });
 }
 
 // ─────────────────────────────────────────────
