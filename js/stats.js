@@ -309,7 +309,7 @@ async function renderAnalysisCharts() {
 
 async function renderAssetChart() {
   // 현금 계좌 제외, 환율 VND 기준으로 환산
-  const accounts = state.accounts.filter(a => a.type !== 'cash');
+  const accounts = state.accounts.filter(a => a.type !== 'cash' && a.type !== 'loan');
   if (!accounts.length) return;
 
   const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
