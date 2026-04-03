@@ -1,7 +1,7 @@
 import { db } from './db.js';
 import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading } from './utils.js';
 import { store } from './store.js';
-import { CATEGORIES, ICONS } from './config.js';
+import { CATEGORIES, ICONS, MAIN_CAT_ICONS } from './config.js';
 import { openModal, closeModal } from './ui.js';
 import { renderHome, renderSettings } from './main.js';
 
@@ -10,7 +10,12 @@ import { renderHome, renderSettings } from './main.js';
 // =============================================
 
 export function renderTxItem(t) {
-  const iconKey = t.iconKey || (t.type === 'income' ? 'income' : t.type === 'transfer' ? 'transfer' : 'etc');
+  let defaultIcon = 'etc';
+  if (t.type === 'income') defaultIcon = 'income';
+  else if (t.type === 'transfer') defaultIcon = 'transfer';
+  else if (t.mainCategory && MAIN_CAT_ICONS[t.mainCategory]) defaultIcon = MAIN_CAT_ICONS[t.mainCategory];
+
+  const iconKey = t.iconKey && t.iconKey !== 'etc' ? t.iconKey : defaultIcon;
   const acc = findAccount(t.accountId || t.fromAccountId);
   const cur = acc?.currency || 'VND';
   const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
@@ -188,7 +193,7 @@ export async function saveTx() {
       memo: document.getElementById('txMemo').value,
       mainCategory: document.getElementById('mainCatSelect').value,
       subCategory: document.getElementById('subCatSelect').value,
-      iconKey: store.selectedTxIcon || (store.currentTxType === 'income' ? 'income' : 'etc'),
+      iconKey: store.selectedTxIcon || MAIN_CAT_ICONS[document.getElementById('mainCatSelect').value] || (store.currentTxType === 'income' ? 'income' : 'etc'),
     };
   }
 
@@ -298,9 +303,19 @@ export function doSearch() {
     const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
     const acc = findAccount(t.accountId || t.fromAccountId);
     const cur = acc?.currency || defaultCur;
+    
+    let defaultIcon = 'etc';
+    if (t.type === 'income') defaultIcon = 'income';
+    else if (t.type === 'transfer') defaultIcon = 'transfer';
+    else if (t.mainCategory && MAIN_CAT_ICONS[t.mainCategory]) defaultIcon = MAIN_CAT_ICONS[t.mainCategory];
+    const iconKey = t.iconKey && t.iconKey !== 'etc' ? t.iconKey : defaultIcon;
+
     return `<div class="report-tx-item" onclick="window.showTxDetail('${t.$id}')">
       <div class="report-tx-date">${fmtDate(t.date?.slice(0,10))}</div>
-      <div class="report-tx-name">${t.memo || t.subCategory || t.mainCategory || '-'}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;">
+        <div class="report-tx-icon" style="width:24px;height:24px;flex-shrink:0;">${iconImg(iconKey, 24)}</div>
+        <div class="report-tx-name">${t.memo || t.subCategory || t.mainCategory || '-'}</div>
+      </div>
       <div class="report-tx-amount" style="color:${t.type==='income'?'var(--income)':t.type==='transfer'?'var(--transfer)':'var(--expense)'}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
     </div>`;
   }).join('');

@@ -136,6 +136,16 @@ export const CATEGORIES = {
   ],
 };
 
+// 대분류별 대표 아이콘 매핑
+export const MAIN_CAT_ICONS = {
+  '한국': 'family_kr',
+  '식비': 'food',
+  '주거/생활': 'housing',
+  '사회생활/여가': 'leisure',
+  '자기개발/건강': 'health',
+  '기타': 'etc'
+};
+
 // 통화 정보
 export const CURRENCIES = [
   { code: 'VND', symbol: '₫', name: '베트남 동', icon: 'vnd' },
@@ -159,4 +169,4 @@ export const ACCOUNT_TYPES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.045';
+export const APP_VERSION = '1.046';
