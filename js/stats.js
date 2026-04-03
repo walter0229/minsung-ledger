@@ -1,4 +1,4 @@
-import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini } from './utils.js';
+import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini, findAccount } from './utils.js';
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
