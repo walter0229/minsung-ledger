@@ -216,27 +216,22 @@ export async function sendAiMsg() {
   }
 }
 
-export function renderReportScreen() {
-  renderAnalysisCharts();
+export async function renderReportScreen() {
+  await renderAnalysisCharts();
   renderAssetChart();
 }
 
-function renderAnalysisCharts() {
+async function renderAnalysisCharts() {
   const baseCur = 'VND';
   const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
-  
-  // 환율 데이터 보장
-  (async () => {
-    for (const t of txs) {
-      const acc = findAccount(t.accountId || t.fromAccountId);
-      const cur = acc?.currency || 'VND';
-      t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
-    }
-    continueRenderAnalysisCharts();
-  })();
-}
 
-function continueRenderAnalysisCharts() {
+  // 환율 변환 먼저 완료 (KRW 등 타 통화 정확히 처리)
+  for (const t of txs) {
+    const acc = findAccount(t.accountId || t.fromAccountId);
+    const cur = acc?.currency || 'VND';
+    t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
+  }
+
   const status = getBudgetStatus(state.currentMonth);
   // 대분류별로 그룹화 (여러 개의 소분류 예산이 있을 경우 합산)
   const catMap = {};
@@ -262,12 +257,10 @@ function continueRenderAnalysisCharts() {
   const labels = Object.keys(catMap);
   const used = labels.map(k => catMap[k].used);
   const budget = labels.map(k => catMap[k].budget);
-  const month = (state.currentMonth || '').replace(/\./g, '-');
   const timeProgress = getTimeProgress(store.reportPeriod === 'monthly' ? 'monthly' : store.reportPeriod === 'weekly' ? 'weekly' : 'yearly');
 
   if (store.usageChart) store.usageChart.destroy();
   const ctx1 = document.getElementById('usageChart').getContext('2d');
-  
   if(window.Chart) {
     store.usageChart = new window.Chart(ctx1, {
       type: 'bar',
@@ -284,7 +277,7 @@ function continueRenderAnalysisCharts() {
 
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
-  // 🚀 중복 합산 방지 (대분류만 필터링)
+  // 중복 합산 방지 (대분류만 필터링)
   const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
   const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
   const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);

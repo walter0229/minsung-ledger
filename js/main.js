@@ -26,15 +26,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   setTimeout(checkDbStatus, 1500);
 });
 
-export function renderHome() {
+export async function renderHome() {
   const [y, m] = state.currentMonth.split('-').map(Number);
   const label = `${y}년 ${m}월`;
   document.getElementById('homeMonthLabel').textContent = label;
 
-  renderMonthSummary();
+  await renderMonthSummary(); // 환율 계산 완료 후 진행
   renderAccountsList();
   renderTxList();
-  renderBudgetAlerts();
+  renderBudgetAlerts(); // vndAmt 준비된 후 호출
 }
 
 async function renderMonthSummary() {
