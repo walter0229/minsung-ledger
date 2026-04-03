@@ -1,4 +1,4 @@
-import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini, findAccount } from './utils.js';
+import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini, findAccount, calcBalance } from './utils.js';
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
@@ -218,7 +218,7 @@ export async function sendAiMsg() {
 
 export async function renderReportScreen() {
   await renderAnalysisCharts();
-  renderAssetChart();
+  await renderAssetChart();
 }
 
 async function renderAnalysisCharts() {
@@ -306,28 +306,53 @@ async function renderAnalysisCharts() {
   }
 }
 
-function renderAssetChart() {
-  const accounts = state.accounts;
-  const labels = accounts.map(a => a.name);
-  const data = accounts.map(a => Number(a.initialBalance));
+
+async function renderAssetChart() {
+  // 현금 계좌 제외, 환율 VND 기준으로 환산
+  const accounts = state.accounts.filter(a => a.type !== 'cash');
+  if (!accounts.length) return;
+
   const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
+  const labels = [];
+  const data = [];
+  const bgColors = [];
+
+  for (let i = 0; i < accounts.length; i++) {
+    const a = accounts[i];
+    // 초기잔액 + 거래내역 반영 실제 잔액
+    const rawBal = (Number(a.initialBalance) || 0) + calcBalance(a.$id);
+    // VND로 환산
+    const inVND = await convertCurrency(rawBal, a.currency || 'VND', 'VND');
+    const finalVal = a.type === 'loan' ? -Math.abs(inVND) : inVND;
+
+    labels.push(`${a.name}${a.currency !== 'VND' ? ` (${a.currency})` : ''}`);
+    data.push(Math.round(finalVal));
+    bgColors.push(a.type === 'loan' ? 'rgba(248,113,113,0.7)' : colors[i % colors.length]);
+  }
 
   if (store.assetChart) store.assetChart.destroy();
   const ctx = document.getElementById('assetChart').getContext('2d');
-  
+
   if(window.Chart) {
     store.assetChart = new window.Chart(ctx, {
       type: 'bar',
       data: {
         labels,
-        datasets: [{ label: '자산', data, backgroundColor: colors.slice(0, data.length) }]
+        datasets: [{ label: '자산 (VND 환산)', data, backgroundColor: bgColors }]
       },
       options: {
         indexAxis: 'y',
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${Math.round(ctx.raw).toLocaleString()} VND`
+            }
+          }
+        },
         scales: {
-          x: { ticks: { color: '#5a5a78' } },
-          y: { ticks: { color: '#9090b0' } }
+          x: { ticks: { color: '#5a5a78', callback: v => (v/1000000).toFixed(1) + 'M' }, grid: { color: '#2e2e3e' } },
+          y: { ticks: { color: '#9090b0' }, grid: { display: false } }
         }
       }
     });
