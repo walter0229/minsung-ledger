@@ -223,9 +223,30 @@ export function renderReportScreen() {
 
 function renderAnalysisCharts() {
   const status = getBudgetStatus(state.currentMonth);
-  const labels = status.map(b => (b.subCategory && b.subCategory !== "") ? `${b.category}(${b.subCategory})` : b.category);
-  const used = status.map(b => Number(b.used));
-  const budget = status.map(b => Number(b.amount));
+  // 대분류별로 그룹화 (여러 개의 소분류 예산이 있을 경우 합산)
+  const catMap = {};
+  // 1단계: 대분류 예산이 있는 항목들 먼저 등록
+  status.forEach(b => {
+    if (!b.subCategory || b.subCategory === "") {
+      catMap[b.category] = { budget: Number(b.amount || 0), used: Number(b.used || 0), mainFound: true };
+    }
+  });
+  // 2단계: 대분류 예산이 없는 경우, 해당 카테고리에 속한 소분류 항목들을 합산
+  status.forEach(b => {
+    if (b.subCategory && b.subCategory !== "") {
+      if (!catMap[b.category]) {
+        catMap[b.category] = { budget: 0, used: 0, mainFound: false };
+      }
+      if (!catMap[b.category].mainFound) {
+        catMap[b.category].budget += Number(b.amount || 0);
+        catMap[b.category].used += Number(b.used || 0);
+      }
+    }
+  });
+
+  const labels = Object.keys(catMap);
+  const used = labels.map(k => catMap[k].used);
+  const budget = labels.map(k => catMap[k].budget);
   const month = (state.currentMonth || '').replace(/\./g, '-');
   const timeProgress = getTimeProgress(store.reportPeriod === 'monthly' ? 'monthly' : store.reportPeriod === 'weekly' ? 'weekly' : 'yearly');
 
