@@ -428,3 +428,19 @@ window.executeDeleteAccount = function() {
     closeModal('accountModal');
   }
 };
+
+window.forceUpdateApp = async function() {
+  if (navigator.serviceWorker) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (let reg of registrations) {
+        await reg.unregister();
+      }
+    } catch(e) { console.error(e); }
+  }
+  toast('🔄 새 버전으로 갱신합니다...', 'info');
+  setTimeout(() => {
+    // 캐시를 무시하고 새로고침
+    window.location.reload(true);
+  }, 1000);
+};

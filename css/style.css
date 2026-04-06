@@ -70,7 +70,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 
 /* ── FAB 버튼 (+) ─────────────────────────── */
 .fab {
-  position: fixed; bottom: 70px; right: calc(50% - 240px + 16px);
+  position: fixed; bottom: 70px; right: 16px;
   width: 56px; height: 56px; border-radius: 50%;
   background: linear-gradient(135deg, var(--accent) 0%, #6366f1 100%);
   border: none; cursor: pointer; z-index: 300;
@@ -84,7 +84,7 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 
 /* 카메라 FAB (홈에서만) */
 .fab-camera {
-  position: fixed; bottom: 136px; right: calc(50% - 240px + 16px);
+  position: fixed; bottom: 136px; right: 16px;
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--bg3); border: 1px solid var(--border);
   cursor: pointer; z-index: 299;
