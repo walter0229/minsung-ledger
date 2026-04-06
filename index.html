@@ -267,7 +267,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.054</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.055</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -309,7 +309,7 @@
   </nav>
 
   <!-- ══ FAB 버튼 (드래그 가능) ═══════════════ -->
-  <button class="fab" id="fabBtn">
+  <button class="fab" id="fabBtn" onclick="if(!window.__fabMoved && window.openAddModal) window.openAddModal()">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
   </button>
 

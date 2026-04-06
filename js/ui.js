@@ -41,10 +41,10 @@ function initFabDrag() {
   const fab = document.getElementById('fabBtn');
   if (!fab) return;
   let isDragging = false, startX, startY, initX, initY;
-  let moved = false;
+  window.__fabMoved = false;
 
   const onStart = (e) => {
-    isDragging = true; moved = false;
+    isDragging = true; window.__fabMoved = false;
     const touch = e.touches ? e.touches[0] : e;
     startX = touch.clientX; startY = touch.clientY;
     const rect = fab.getBoundingClientRect();
@@ -56,7 +56,8 @@ function initFabDrag() {
     const touch = e.touches ? e.touches[0] : e;
     const dx = touch.clientX - startX;
     const dy = touch.clientY - startY;
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) window.__fabMoved = true;
+    if (window.__fabMoved && e.cancelable) e.preventDefault();
     const newLeft = Math.max(10, Math.min(window.innerWidth - 66, initX + dx));
     const newTop = Math.max(10, Math.min(window.innerHeight - 126, initY + dy));
     fab.style.left = newLeft + 'px';
@@ -68,9 +69,8 @@ function initFabDrag() {
     if (!isDragging) return;
     isDragging = false;
     fab.style.transition = 'box-shadow 0.2s, transform 0.2s';
-    if (!moved) {
-      if (window.openAddModal) window.openAddModal();
-    }
+    // 클릭 이벤트에서 처리하도록 위임. 드래그 직후 클릭이 발생하지 않도록 약간 딜레이 후 초기화
+    setTimeout(() => { window.__fabMoved = false; }, 100);
   };
 
   fab.addEventListener('mousedown', onStart);
