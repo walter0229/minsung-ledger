@@ -189,6 +189,11 @@ class AppwriteDB {
   async createAccount(d) { await this.ready; return this.createDoc(COL.ACCOUNTS, d); }
   async updateAccount(id, d) { await this.ready; return this.updateDoc(COL.ACCOUNTS, id, d); }
   async deleteAccount(id) { await this.ready; return this.deleteDoc(COL.ACCOUNTS, id); }
+
+  // 트랜잭션 관련 호환성
+  async createTransaction(d) { await this.ready; return this.createDoc(COL.TRANSACTIONS, d); }
+  async updateTransaction(id, d) { await this.ready; return this.updateDoc(COL.TRANSACTIONS, id, d); }
+  async deleteTransaction(id) { await this.ready; return this.deleteDoc(COL.TRANSACTIONS, id); }
 }
 
 export const db = new AppwriteDB();
