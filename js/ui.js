@@ -121,22 +121,52 @@ export async function handleCameraInput(input) {
     toast('🔍 영수증 분석 중...', 'info');
     try {
       const data = await parseReceipt(base64);
-      if (data) {
-        if(window.openAddModal) window.openAddModal();
-        if (data.date) document.getElementById('txDate').value = data.date;
-        if (data.amount) {
-          document.getElementById('txAmount').value = Number(data.amount).toLocaleString();
-          document.getElementById('txAmount').dataset.raw = String(data.amount);
+      if (data && data.amount) {
+        showLoading(true);
+        // 신한은행 계좌 찾기 (없으면 첫 번째 계좌)
+        const targetBank = state.accounts.find(a => a.name.includes('신한')) || state.accounts[0];
+        if (!targetBank) {
+          throw new Error('등록된 계좌가 없습니다.');
         }
-        if (data.merchant) document.getElementById('txMemo').value = data.merchant;
-        toast('✅ 영수증 분석 완료!', 'success');
+
+        // 카테고리 매핑 로직 (간단한 포함 여부 체크)
+        let mainCat = '기타';
+        let iconKey = 'etc';
+        const rawCat = (data.category || '').toLowerCase();
+        if (rawCat.includes('식비') || rawCat.includes('음식') || rawCat.includes('카페')) { mainCat = '식비'; iconKey = 'food'; }
+        else if (rawCat.includes('주거') || rawCat.includes('생활')) { mainCat = '주거/생활'; iconKey = 'housing'; }
+        else if (rawCat.includes('사회') || rawCat.includes('여가')) { mainCat = '사회생활/여가'; iconKey = 'leisure'; }
+        else if (rawCat.includes('건강') || rawCat.includes('자기개발')) { mainCat = '자기개발/건강'; iconKey = 'health'; }
+
+        const txData = {
+          date: data.date || new Date().toISOString().slice(0, 10),
+          type: 'expense',
+          accountId: targetBank.$id,
+          amount: Number(data.amount),
+          memo: data.merchant || '영수증 지출',
+          mainCategory: mainCat,
+          subCategory: '',
+          iconKey: iconKey
+        };
+
+        const saved = await db.createTransaction(txData);
+        state.transactions.unshift(saved);
+        showLoading(false);
+
+        // 출력 메시지 구성
+        const itemCount = data.items && data.items.length ? data.items.length : 1;
+        const totalAmountStr = Number(data.amount).toLocaleString();
+        const currencyStr = targetBank.currency || 'VND';
+        
+        alert(`✅ ${itemCount}개 입력되고, 총합계금액이 ${totalAmountStr} ${currencyStr} 입니다.`);
+        
+        if (window.renderHome) window.renderHome();
       } else {
-        toast('⚠️ 영수증 인식 실패. 직접 입력해주세요', 'error');
-        if(window.openAddModal) window.openAddModal();
+        toast('⚠️ 영수증 인식 실패. 다시 시도해주세요.', 'error');
       }
     } catch(err) {
+      showLoading(false);
       toast('❌ ' + err.message, 'error');
-      if(window.openAddModal) window.openAddModal();
     }
   };
   reader.readAsDataURL(file);
