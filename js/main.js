@@ -8,30 +8,50 @@ import { openAddModal, setTxType, onMainCatChange, selectTxAccount, selectTransf
 import { openBudgetModal, renderBudgetInputList, updateCategoryTotal, saveBudgets } from './budget.js';
 import { getTotalBalanceInBase, convertCurrency } from './sync.js';
 
-// =============================================
-// 민성이의 가계부 - 진입점 & 전역 이벤트 바인딩
-// =============================================
+// 전역 유틸리티 등록 (HTML onclick 및 진단용)
+window.db = db;
+window.checkDbStatus = checkDbStatus;
+window.renderDiagnostics = renderDiagnostics;
+window.loadAll = loadAll;
+window.renderHome = renderHome;
+window.forceUpdateApp = async function() {
+  if (navigator.serviceWorker) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (let reg of regs) await reg.unregister();
+  }
+  localStorage.removeItem('app-ver');
+  window.location.reload(true);
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    // 💡 버전이 다르면 캐시 무시하고 새로고침 (v1.057 고정)
-    const CURRENT_VER = '1.057';
+    const CURRENT_VER = '1.058';
     if (localStorage.getItem('app-ver') !== CURRENT_VER) {
       localStorage.setItem('app-ver', CURRENT_VER);
       window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
       return;
     }
 
-    await loadAll();
     initUI();
+    renderDiagnostics();
+
+    await loadAll();
     renderHome();
     renderCalendarScreen();
-    setSearchDates();
+    // setSearchDates 등 필요한 초기화 추가
+    const elSearchFrom = document.getElementById('searchFrom');
+    if (elSearchFrom) {
+       const today = new Date();
+       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+       elSearchFrom.value = firstDay.toISOString().split('T')[0];
+       document.getElementById('searchTo').value = today.toISOString().split('T')[0];
+    }
     setTimeout(checkDbStatus, 1500);
   } catch (err) {
     console.error('앱 초기화 오류:', err);
-    showLoading(false);
-    alert('❌ 데이터를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나, 네트워크 연결을 확인해주세요.\n\n오류: ' + err.message);
+    if (window.showLoading) window.showLoading(false);
+    if (db && db.logError) db.logError('초기화 치명적 에러: ' + err.message);
+    alert('❌ 데이터를 불러오는 중 오류가 발생했습니다. 설정 페이지의 [DB 접속 진단]을 확인해주세요.');
   }
 });
 

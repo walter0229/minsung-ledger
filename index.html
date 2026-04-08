@@ -15,7 +15,7 @@
 <script>
   // 🚀 Emergency Recovery Script (v1.057)
   (function() {
-    const CURRENT_VER = '1.057';
+    const CURRENT_VER = '1.058';
     const isRepair = window.location.search.includes('v=repair');
     const storedVer = localStorage.getItem('app-ver');
 
@@ -290,13 +290,18 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.057</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.058</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
-        <div class="settings-item">
-          <div class="settings-item-label">DB 상태</div>
-          <div id="dbStatus" style="font-size:13px;color:var(--income);">연결 중...</div>
+        <div class="settings-item" style="flex-direction:column; align-items:flex-start; pointer-events:auto;">
+          <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:8px;">
+            <div class="settings-item-label">DB 접속 진단</div>
+            <button class="btn-primary btn-sm" onclick="db.reconnect()" style="width:auto; padding:4px 10px;">서버 다시 연결</button>
+          </div>
+          <div id="diagnosticBoard" style="width:100%; height:100px; background:rgba(0,0,0,0.3); border-radius:8px; padding:8px; font-size:11px; font-family:monospace; color:var(--text3); overflow-y:auto; line-height:1.4;">
+            조회된 진단 정보가 없습니다.
+          </div>
         </div>
         <button class="btn-secondary btn-sm btn-danger" onclick="clearAllData()" style="margin-top:10px;">전체 데이터 삭제</button>
       </div>
@@ -541,6 +546,6 @@
 
 <!-- Appwrite Web SDK -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
-<script type="module" src="js/main.js?v=1.057"></script>
+<script type="module" src="js/main.js?v=1.058"></script>
 </body>
 </html>

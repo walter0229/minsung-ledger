@@ -6,9 +6,10 @@ import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DB_ID, COL } from './config.js'
 
 class AppwriteDB {
   constructor() {
+    this.errorLog = [];
     try {
       if (!window.Appwrite) {
-        console.warn('Appwrite SDK가 아직 로드되지 않았습니다. 오프라인 모드로 전환합니다.');
+        this.logError('Appwrite SDK 로드 실패: window.Appwrite가 존재하지 않습니다.');
         this.online = false;
         this.ready = Promise.resolve();
         return;
@@ -20,7 +21,7 @@ class AppwriteDB {
       this.online = true;
       this.ready = this.ensureSession();
     } catch (e) {
-      console.error('DB 레이어 초기화 중 치명적 오류:', e.message);
+      this.logError('DB 초기화 에러: ' + e.message);
       this.online = false;
       this.ready = Promise.resolve();
     }
@@ -52,28 +53,41 @@ class AppwriteDB {
     };
   }
 
+  logError(msg) {
+    const time = new Date().toLocaleTimeString();
+    console.warn(`[DB-ERROR ${time}] ${msg}`);
+    this.errorLog.push(`[${time}] ${msg}`);
+    if (this.errorLog.length > 20) this.errorLog.shift();
+    if (window.renderDiagnostics) window.renderDiagnostics();
+  }
+
   async ensureSession() {
     if (!this.online) return;
-    
-    // 💡 세션 확인 타임아웃 (10초)
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('세션 확인 타임아웃')), 10000));
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('세션 확인 타임아웃(10초)')), 10000));
     
     try {
       await Promise.race([this.account.get(), timeout]);
       console.log('✅ 세션 연결 성공');
     } catch (e) {
-      if (e.message === '세션 확인 타임아웃') {
-        console.warn('⚠️ 세션 응답 지연으로 오프라인 전환');
-        this.online = false;
-        return;
-      }
+      this.logError('기존 세션 확인 실패: ' + e.message);
       try {
         await Promise.race([this.account.createAnonymousSession(), timeout]);
         console.log('✅ 익명 세션 생성 성공');
       } catch (err) {
-        console.warn('❌ 세션 생성 실패:', err.message);
+        this.logError('익명 세션 생성 실패: ' + err.message);
         this.online = false;
       }
+    }
+  }
+
+  async reconnect() {
+    this.logError('💡 서버 재연결 시도 중...');
+    this.online = true;
+    await this.ensureSession();
+    if (window.checkDbStatus) window.checkDbStatus();
+    if (this.online) {
+      if (window.loadAll) await window.loadAll();
+      if (window.renderHome) window.renderHome();
     }
   }
 
