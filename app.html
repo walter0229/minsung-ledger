@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:,">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>민성이의 가계부</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  // 🚀 Emergency Recovery Script (v1.057)
+  (function() {
+    const CURRENT_VER = '1.200';
+    const isRepair = window.location.search.includes('v=repair');
+    const storedVer = localStorage.getItem('app-ver');
+
+    if (isRepair || (storedVer && storedVer !== CURRENT_VER)) {
+      console.log('⚡ 서비스 워커 및 캐시 강제 초기화 시작...');
+      localStorage.clear();
+      localStorage.setItem('app-ver', CURRENT_VER);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for(let reg of regs) reg.unregister();
+        });
+      }
+      // 캐시 무시하고 리다이렉트
+      if (isRepair) {
+        window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
+      }
+    }
+  })();
+</script>
+
+<!-- UI 기능을 위한 전역 브릿지 (모듈 로드 전 클릭 에러 방지) -->
+<script>
+  window.showPage = function(id) { if(window.__showPage) window.__showPage(id); else console.warn('UI 아직 준비 안됨'); };
+  window.openModal = function(id) { if(window.__openModal) window.__openModal(id); };
+  window.closeModal = function(id) { if(window.__closeModal) window.__closeModal(id); };
+  window.openAddModal = function(id) { if(window.__openAddModal) window.__openAddModal(id); };
+  window.prevMonth = function() { if(window.__prevMonth) window.__prevMonth(); };
+  window.nextMonth = function() { if(window.__nextMonth) window.__nextMonth(); };
+</script>
+</head>
+<body>
+
+<!-- 로딩 오버레이 -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <p style="color:var(--text2);font-size:13px;">불러오는 중...</p>
+</div>
+
+<div id="app">
+
+  <!-- ══ 페이지: 홈 ══════════════════════════ -->
+  <div id="page-home" class="page active">
+    <div class="app-header">
+      <div class="header-row">
+        <div>
+          <h1>💰 민성이의 가계부</h1>
+          <div class="subtitle" id="homeMonthLabel"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="prevMonth()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;">‹</button>
+          <button onclick="nextMonth()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;">›</button>
+          <button onclick="openCamera()" style="background:linear-gradient(135deg,#7c6af7,#6366f1);border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(124,106,247,0.5);" title="영수증 촬영">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </button>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 월 요약 카드 -->
+    <div class="home-summary">
+      <div class="month-label">이번달 잔액</div>
+      <div class="balance" id="homeTotalBalance"><span class="money-symbol">₫</span>0</div>
+      <div class="summary-row">
+        <div class="summary-item income">
+          <div class="label">수입</div>
+          <div class="value" id="homeIncome"><span class="money-symbol">₫</span>0</div>
+        </div>
+        <div class="summary-item expense">
+          <div class="label">지출</div>
+          <div class="value" id="homeExpense"><span class="money-symbol">₫</span>0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 예산 오버 알림 -->
+    <div id="budgetAlerts" style="padding:0 16px;margin-bottom:8px;"></div>
+
+    <!-- 최근 거래 -->
+    <div class="section-header" style="margin-top:16px;">
+      <h2>최근 거래</h2>
+    </div>
+    <div class="tx-list" id="txList"></div>
+  </div>
+
+  <!-- ══ 페이지: 달력 ══════════════════════════ -->
+  <div id="page-calendar" class="page">
+    <div class="app-header">
+      <h1>📅 달력</h1>
+    </div>
+    <div class="calendar-wrap">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="calPrevMonth()">‹</button>
+        <div class="cal-title" id="calTitle"></div>
+        <button class="cal-nav" onclick="calNextMonth()">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-detail" id="calDetail" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ══ 페이지: 통계 ══════════════════════════ -->
+  <div id="page-stats" class="page">
+    <div class="app-header">
+      <h1>📊 통계</h1>
+    </div>
+    <div class="stats-wrap">
+      <div class="period-tabs">
+        <button class="period-tab active" onclick="setStatsPeriod('monthly',this)">월간</button>
+        <button class="period-tab" onclick="setStatsPeriod('weekly',this)">주간</button>
+        <button class="period-tab" onclick="setStatsPeriod('yearly',this)">연간</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="period-tab active" id="statsExpenseTab" onclick="setStatsType('expense',this)" style="flex:1;padding:8px;">지출</button>
+        <button class="period-tab" id="statsIncomeTab" onclick="setStatsType('income',this)" style="flex:1;padding:8px;">수입</button>
+      </div>
+      <div class="donut-wrap">
+        <canvas id="donutChart"></canvas>
+        <div class="donut-center">
+          <div class="total" id="donutTotal">₫0</div>
+          <div class="label" id="donutLabel">지출 합계</div>
+        </div>
+      </div>
+      <div class="legend-list" id="statsLegend"></div>
+
+      <!-- 예산 현황 -->
+      <div style="margin-top:24px;">
+        <div class="section-header" style="padding:0 0 10px;">
+          <h2>📋 예산 현황</h2>
+          <a href="#" onclick="openBudgetModal();return false;">설정</a>
+        </div>
+        <div id="budgetBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 페이지: 보고서 ══════════════════════════ -->
+  <div id="page-report" class="page">
+    <div class="app-header">
+      <h1>📋 보고서</h1>
+    </div>
+    <div class="report-wrap">
+
+      <!-- 기간 탭 -->
+      <div class="period-tabs" style="margin-bottom:16px;">
+        <button class="period-tab active" onclick="setReportPeriod('monthly',this)">월간</button>
+        <button class="period-tab" onclick="setReportPeriod('weekly',this)">주간</button>
+        <button class="period-tab" onclick="setReportPeriod('yearly',this)">연간</button>
+      </div>
+
+      <!-- 분석 -->
+      <div class="report-section">
+        <h3>📈 예산 분석</h3>
+        <div class="analysis-card">
+          <h4>사용률 그래프</h4>
+          <div class="chart-wrap"><canvas id="usageChart"></canvas></div>
+        </div>
+        <div class="analysis-card">
+          <h4>시간 경과율</h4>
+          <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 자산 현황 -->
+      <div class="report-section">
+        <h3>💹 자산 현황</h3>
+        <div class="analysis-card">
+          <h4>계좌별 잔액 (VND 환산)</h4>
+          <div class="chart-wrap"><canvas id="assetChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 자산 변동 (일자별 총 잔액) -->
+      <div class="report-section">
+        <h3>📊 자산 변동</h3>
+        <div class="analysis-card">
+          <h4>일자별 총 잔액 추이 (VND)</h4>
+          <div class="chart-wrap" style="height:220px;"><canvas id="balanceTrendChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- AI 금융 비서 -->
+      <div class="report-section">
+        <h3>🤖 AI 금융 비서</h3>
+        <div class="ai-chat">
+          <div class="ai-msg" id="aiMsg">Gemini API Key를 설정에 입력하면 AI 금융 비서가 활성화됩니다.<br><br>✨ "이번달 지출 분석해줘", "절약 방법 알려줘" 등을 물어보세요!</div>
+          <div class="ai-input-row">
+            <input type="text" class="ai-input" id="aiInput" placeholder="AI에게 물어보세요..." onkeydown="if(event.key==='Enter')sendAiMsg()">
+            <button class="ai-send" onclick="sendAiMsg()">전송</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 검색 -->
+      <div class="report-section">
+        <h3>🔍 거래 검색</h3>
+        <div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="date" class="form-input" id="searchFrom" style="flex:1;">
+            <span style="line-height:44px;color:var(--text3);">~</span>
+            <input type="date" class="form-input" id="searchTo" style="flex:1;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <input type="text" class="form-input" id="searchKeyword" placeholder="내역 검색 (비워두면 전체)">
+          </div>
+          <button class="btn-primary" onclick="doSearch()" style="margin-bottom:12px;">🔍 검색</button>
+          <div id="searchResults"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ 페이지: 계좌 ══════════════════════════ -->
+  <div id="page-accounts" class="page">
+    <div class="app-header">
+      <div class="header-row">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <h1>🏦 계좌 관리</h1>
+          <span id="accountsTotalSum" style="font-size:14px;color:#facc15;font-weight:700;margin-top:4px;"></span>
+        </div>
+        <button onclick="openAccountModal()" style="background:linear-gradient(135deg,var(--accent),#6366f1);border:none;border-radius:20px;color:white;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">+ 추가</button>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;" id="accountsPageSummary"></div>
+    <div style="padding:0 16px;" id="accountsPageList"></div>
+  </div>
+
+  <!-- ══ 페이지: 설정 ══════════════════════════ -->
+  <div id="page-settings" class="page">
+    <div class="app-header">
+      <h1>⚙️ 설정</h1>
+    </div>
+    <div class="settings-wrap">
+
+      <!-- API 설정 -->
+      <div class="settings-section">
+        <h3>🔑 API 설정</h3>
+        <div class="form-group">
+          <label class="form-label">Gemini API Key</label>
+          <input type="password" class="form-input" id="geminiKeyInput" placeholder="AIzaSy...">
+        </div>
+        <button class="btn-primary" onclick="saveApiSettings()" style="margin-bottom:8px;">저장</button>
+      </div>
+
+      <!-- 테마 -->
+      <div class="settings-section">
+        <h3>🎨 테마</h3>
+        <div class="settings-item">
+          <div><div class="settings-item-label">다크 모드</div></div>
+          <label class="toggle"><input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode(this)"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-group" style="margin-top:12px;">
+          <label class="form-label">배경 테마 색상</label>
+          <div class="theme-grid" id="themeGrid"></div>
+        </div>
+      </div>
+
+      <!-- 예산 설정 -->
+      <div class="settings-section">
+        <h3>📋 월별 예산 설정</h3>
+        <button class="btn-secondary btn-sm" onclick="openBudgetModal()" style="margin-bottom:10px;">예산 설정하기</button>
+        <div id="budgetSettingList"></div>
+      </div>
+
+      <!-- 리마인드 -->
+      <div class="settings-section">
+        <h3>🔔 리마인드</h3>
+        <div class="settings-item">
+          <div><div class="settings-item-label">알림 활성화</div><div class="settings-item-sub">지출 입력 리마인드</div></div>
+          <label class="toggle"><input type="checkbox" id="reminderToggle" onchange="toggleReminder(this)"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">알림 시간</label>
+          <input type="time" class="form-input" id="reminderTime" value="09:00" onchange="saveReminderTime(this)">
+        </div>
+      </div>
+
+      <!-- 앱 정보 -->
+      <div class="settings-section">
+        <h3>ℹ️ 앱 정보</h3>
+        <div class="settings-item">
+          <div class="settings-item-label">버전</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.060</div>
+            <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
+          </div>
+        </div>
+        <div class="settings-item" style="flex-direction:column; align-items:flex-start; pointer-events:auto;">
+          <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:8px;">
+            <div class="settings-item-label">DB 접속 진단</div>
+            <button class="btn-primary btn-sm" onclick="db.reconnect()" style="width:auto; padding:4px 10px;">서버 다시 연결</button>
+          </div>
+          <div id="diagnosticBoard" style="width:100%; height:100px; background:rgba(0,0,0,0.3); border-radius:8px; padding:8px; font-size:11px; font-family:monospace; color:var(--text3); overflow-y:auto; line-height:1.4;">
+            조회된 진단 정보가 없습니다.
+          </div>
+        </div>
+        <button class="btn-secondary btn-sm btn-danger" onclick="clearAllData()" style="margin-top:10px;">전체 데이터 삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 하단 탭 바 ════════════════════════════ -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" onclick="showPage('home')" id="tab-home">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      홈
+    </button>
+    <button class="tab-btn" onclick="showPage('calendar')" id="tab-calendar">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      달력
+    </button>
+    <button class="tab-btn" onclick="showPage('stats')" id="tab-stats">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+      통계
+    </button>
+    <button class="tab-btn" onclick="showPage('report')" id="tab-report">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      보고서
+    </button>
+    <button class="tab-btn" onclick="showPage('accounts')" id="tab-accounts">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      계좌
+    </button>
+    <button class="tab-btn" onclick="showPage('settings')" id="tab-settings">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      설정
+    </button>
+  </nav>
+
+  <!-- ══ FAB 버튼 (드래그 가능) ═══════════════ -->
+  <button class="fab" id="fabBtn" onclick="if(!window.__fabMoved && window.openAddModal) window.openAddModal()">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+  </button>
+
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleCameraInput(this)">
+
+</div><!-- end #app -->
+
+<!-- ══ 모달: 거래 입력 ══════════════════════════ -->
+<div class="modal-overlay" id="addModal" onclick="closeModalOnBg(event,'addModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h2 id="addModalTitle">거래 입력</h2>
+      <button class="modal-close" onclick="closeModal('addModal')">
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- 탭 -->
+      <div class="type-tabs">
+        <button class="type-tab active" data-type="expense" onclick="setTxType('expense',this)">
+          <img src="icons/icon_3d_expense_1768214840824.png" width="20" height="20"> 지출
+        </button>
+        <button class="type-tab" data-type="income" onclick="setTxType('income',this)">
+          <img src="icons/icon_3d_income_1768214857274.png" width="20" height="20"> 수입
+        </button>
+        <button class="type-tab" data-type="transfer" onclick="setTxType('transfer',this)">
+          <img src="icons/icon_3d_transfer_1768214873345.png" width="20" height="20"> 이체
+        </button>
+      </div>
+
+      <!-- 날짜 -->
+      <div class="form-group">
+        <label class="form-label">날짜</label>
+        <input type="date" class="form-input" id="txDate">
+      </div>
+
+      <!-- 지출/수입 폼 -->
+      <div id="expenseIncomeForm">
+        <!-- 분류 (지출만) -->
+        <div class="form-group" id="categorySection">
+          <label class="form-label">분류</label>
+          <div class="cat-select-wrap">
+            <select class="form-select" id="mainCatSelect" onchange="onMainCatChange()">
+              <option value="">대분류 선택</option>
+            </select>
+            <select class="form-select" id="subCatSelect">
+              <option value="">소분류 선택</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 계좌 -->
+        <div class="form-group">
+          <label class="form-label">계좌</label>
+          <div class="account-chips" id="txAccountChips"></div>
+        </div>
+
+        <!-- 금액 -->
+        <div class="form-group">
+          <label class="form-label">금액</label>
+          <div class="amount-input-wrap">
+            <span class="amount-symbol" id="amountSymbol">₫</span>
+            <input type="text" inputmode="numeric" class="form-input" id="txAmount" placeholder="0" oninput="formatNumberInput(this)">
+          </div>
+        </div>
+
+        <!-- 내역 -->
+        <div class="form-group">
+          <label class="form-label">내역</label>
+          <input type="text" class="form-input" id="txMemo" placeholder="내역을 입력하세요">
+        </div>
+
+        <!-- 아이콘 선택 -->
+        <div class="form-group">
+          <label class="form-label">아이콘</label>
+          <div class="icon-grid" id="txIconGrid"></div>
+        </div>
+      </div>
+
+      <!-- 이체 폼 -->
+      <div id="transferForm" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">출금 계좌</label>
+          <div class="account-chips" id="transferFromChips"></div>
+        </div>
+        <div class="transfer-arrow">↓</div>
+        <div class="form-group">
+          <label class="form-label">입금 계좌</label>
+          <div class="account-chips" id="transferToChips"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">금액</label>
+          <div class="amount-input-wrap">
+            <span class="amount-symbol" id="transferSymbol">₫</span>
+            <input type="text" inputmode="numeric" class="form-input" id="transferAmount" placeholder="0" oninput="formatNumberInput(this)">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">메모</label>
+          <input type="text" class="form-input" id="transferMemo" placeholder="이체 내역">
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="saveTx()" style="margin-top:8px;">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 모달: 계좌 추가 ══════════════════════════ -->
+<div class="modal-overlay" id="accountModal" onclick="closeModalOnBg(event,'accountModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h2 id="accountModalTitle">계좌 추가</h2>
+      <button class="modal-close" onclick="closeModal('accountModal')">
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editAccountId">
+      <div class="form-group">
+        <label class="form-label">계좌명</label>
+        <input type="text" class="form-input" id="accountName" placeholder="예: 신한 체크카드">
+      </div>
+      <div class="form-group">
+        <label class="form-label">계좌 유형</label>
+        <select class="form-select" id="accountType">
+          <option value="bank">은행</option>
+          <option value="cash">현금</option>
+          <option value="loan">대출</option>
+          <option value="savings">적금</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">통화</label>
+        <select class="form-select" id="accountCurrency" onchange="updateAccountIcons()">
+          <option value="VND">베트남 동 (₫)</option>
+          <option value="KRW">한국 원 (₩)</option>
+          <option value="USD">미국 달러 ($)</option>
+          <option value="CNY">중국 위안 (¥)</option>
+          <option value="CAD">캐나다 달러 (C$)</option>
+          <option value="PHP">필리핀 페소 (₱)</option>
+          <option value="THB">태국 바트 (฿)</option>
+          <option value="MVR">몰디브 루피야 (ރ.)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">통화 아이콘</label>
+        <div class="icon-grid" id="currencyIconGrid" style="grid-template-columns:repeat(6,1fr);"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">은행 아이콘</label>
+        <div class="icon-grid" id="bankIconGrid" style="grid-template-columns:repeat(6,1fr);"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">정렬 순서 (낮을수록 위쪽)</label>
+        <input type="number" class="form-input" id="accountOrder" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">초기 잔액</label>
+        <input type="text" inputmode="numeric" class="form-input" id="accountBalance" placeholder="0" oninput="formatNumberInput(this)">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn-primary" onclick="saveAccount()" style="flex:1;">저장</button>
+        <button class="btn-secondary" id="btnDeleteAccount" onclick="executeDeleteAccount()" style="display:none;flex:1;background:var(--red);color:white;border:none;">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 모달: 예산 설정 ══════════════════════════ -->
+<div class="modal-overlay" id="budgetModal" onclick="closeModalOnBg(event,'budgetModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h2>월별 예산 설정</h2>
+      <button class="modal-close" onclick="closeModal('budgetModal')">
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">적용 월</label>
+        <input type="month" class="form-input" id="budgetMonth">
+      </div>
+      <div id="budgetInputList"></div>
+      <button class="btn-primary" onclick="saveBudgets()" style="margin-top:8px;">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 모달: 거래 상세 ══════════════════════════ -->
+<div class="modal-overlay" id="txDetailModal" onclick="closeModalOnBg(event,'txDetailModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h2>거래 상세</h2>
+      <button class="modal-close" onclick="closeModal('txDetailModal')">
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="txDetailBody"></div>
+  </div>
+</div>
+
+<!-- Appwrite Web SDK -->
+<script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
+<script type="module" src="js/main.js?v=1.300"></script>
+</body>
+</html>

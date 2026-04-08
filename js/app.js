@@ -6,7 +6,7 @@
 // =============================================
 
 // 앱 버전 (호환성 유지)
-const APP_VERSION = '1.200';
+const APP_VERSION = '1.300';
 
 // 앱 상태 관리
 const state = {
@@ -478,7 +478,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.200';
+const APP_VERSION = '1.300';
 
 
 // =============================================
