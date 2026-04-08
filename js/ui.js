@@ -260,3 +260,19 @@ export function saveReminderTime() {
   state.settings.reminderTime = t;
   window.saveApiSettings();
 }
+
+// 전역 함수 자가 등록
+window.initUI = initUI;
+window.showPage = showPage;
+window.checkDbStatus = checkDbStatus;
+window.renderDiagnostics = renderDiagnostics;
+window.openCamera = openCamera;
+window.handleCameraInput = handleCameraInput;
+window.applyThemePreset = applyThemePreset;
+window.toggleDarkMode = toggleDarkMode;
+window.toggleReminder = toggleReminder;
+window.saveReminderTime = saveReminderTime;
+window.renderThemeGrid = renderThemeGrid;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.closeModalOnBg = closeModalOnBg;

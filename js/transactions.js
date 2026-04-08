@@ -3,7 +3,8 @@ import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toas
 import { store } from './store.js';
 import { CATEGORIES, ICONS, MAIN_CAT_ICONS } from './config.js';
 import { openModal, closeModal } from './ui.js';
-import { renderHome, renderSettings } from './main.js';
+
+// renderHome은 main.js에서 순환 참조를 피하기 위해 window.renderHome을 사용합니다.
 
 // =============================================
 // 민성이의 가계부 - 거래 및 모달 관리
@@ -210,7 +211,7 @@ export async function saveTx() {
       toast('✅ 저장됐어요!');
     }
     closeModal('addModal');
-    renderHome();
+    if (window.renderHome) window.renderHome();
   } catch(e) {
     toast('❌ ' + e.message, 'error');
   }
@@ -260,7 +261,7 @@ export async function deleteTx(txId) {
     state.transactions = state.transactions.filter(t => t.$id !== txId);
     closeModal('txDetailModal');
     toast('🗑️ 삭제됐어요');
-    renderHome();
+    if (window.renderHome) window.renderHome();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
   showLoading(false);
 }
@@ -320,3 +321,17 @@ export function doSearch() {
     </div>`;
   }).join('');
 }
+
+// 전역 함수 자가 등록
+window.openAddModal = openAddModal;
+window.setTxType = setTxType;
+window.onMainCatChange = onMainCatChange;
+window.selectTxAccount = selectTxAccount;
+window.selectTransferFrom = selectTransferFrom;
+window.selectTransferTo = selectTransferTo;
+window.selectTxIcon = selectTxIcon;
+window.saveTx = saveTx;
+window.showTxDetail = showTxDetail;
+window.deleteTx = deleteTx;
+window.doSearch = doSearch;
+window.renderTxItem = renderTxItem;

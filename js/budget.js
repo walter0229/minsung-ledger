@@ -124,3 +124,9 @@ function updateLocalBudgetStore(saved) {
   if (idx >= 0) state.budgets[idx] = saved;
   else state.budgets.push(saved);
 }
+
+// 전역 함수 자가 등록
+window.openBudgetModal = openBudgetModal;
+window.saveBudgets = saveBudgets;
+window.updateCategoryTotal = updateCategoryTotal;
+window.renderBudgetInputList = renderBudgetInputList;

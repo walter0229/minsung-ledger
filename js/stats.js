@@ -524,3 +524,4 @@ window.showCalDetail = showCalDetail;
 window.setStatsPeriod = setStatsPeriod;
 window.setStatsType = setStatsType;
 window.setReportPeriod = setReportPeriod;
+window.renderCalendarScreen = renderCalendarScreen;
