@@ -6,7 +6,7 @@
 // =============================================
 
 // 앱 버전 (호환성 유지)
-const APP_VERSION = '1.320';
+const APP_VERSION = '1.400';
 
 // 앱 상태 관리
 const state = {
@@ -2147,7 +2147,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const CURRENT_VER = '1.100';
+    const CURRENT_VER = '1.400';
     if (localStorage.getItem('app-ver') !== CURRENT_VER) {
       localStorage.setItem('app-ver', CURRENT_VER);
       window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
