@@ -1,19 +1,61 @@
-import { loadAll, state, fmtMoney, getCategoryStats, todayStr, getTimeProgress, toast, formatNumberInput, applyTheme, getBudgetStatus, iconImg, calcBalance, findAccount, getCurrencySymbol, showLoading, fmtDate } from './utils.js';
+import { loadAll, state, fmtMoney, getCategoryStats, todayStr, getTimeProgress, toast, formatNumberInput, applyTheme, getBudgetStatus, iconImg, calcBalance, findAccount, getCurrencySymbol, showLoading, fmtDate, resetAll } from './utils.js';
 import { db } from './db.js';
 import { ICONS, CATEGORIES, APP_VERSION } from './config.js';
 import { store } from './store.js';
-import { initUI, showPage, checkDbStatus, openCamera, handleCameraInput, applyThemePreset, toggleDarkMode, toggleReminder, saveReminderTime, renderThemeGrid, openModal, closeModal, closeModalOnBg } from './ui.js';
+import { initUI, showPage, checkDbStatus, openCamera, handleCameraInput, applyThemePreset, toggleDarkMode, toggleReminder, saveReminderTime, renderThemeGrid, openModal, closeModal, closeModalOnBg, renderDiagnostics } from './ui.js';
 import { renderCalendarScreen, setStatsPeriod, setStatsType, renderStatsScreen, setReportPeriod, renderReportScreen, calPrevMonth, calNextMonth, showCalDetail } from './stats.js';
 import { openAddModal, setTxType, onMainCatChange, selectTxAccount, selectTransferFrom, selectTransferTo, selectTxIcon, saveTx, showTxDetail, deleteTx, doSearch, renderTxItem } from './transactions.js';
 import { openBudgetModal, renderBudgetInputList, updateCategoryTotal, saveBudgets } from './budget.js';
 import { getTotalBalanceInBase, convertCurrency } from './sync.js';
 
-// 전역 유틸리티 등록 (HTML onclick 및 진단용)
+// =============================================
+// 민성이의 가계부 - v1.059 전역 바인딩 (긴급수정)
+// =============================================
+
+// DB 및 진단
 window.db = db;
 window.checkDbStatus = checkDbStatus;
 window.renderDiagnostics = renderDiagnostics;
+
+// 공통 UI 및 유틸
+window.showPage = showPage;
 window.loadAll = loadAll;
+window.resetAll = resetAll;
+window.openCamera = openCamera;
+window.handleCameraInput = handleCameraInput;
+window.toast = toast;
+window.showLoading = showLoading;
+window.formatNumberInput = formatNumberInput;
+
+// 모달 및 설정
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.closeModalOnBg = closeModalOnBg;
+window.applyThemePreset = applyThemePreset;
+window.toggleDarkMode = toggleDarkMode;
+window.toggleReminder = toggleReminder;
+window.saveReminderTime = saveReminderTime;
+
+// 거래(Transaction) 관련
 window.renderHome = renderHome;
+window.openAddModal = openAddModal;
+window.setTxType = setTxType;
+window.onMainCatChange = onMainCatChange;
+window.saveTx = saveTx;
+window.showTxDetail = showTxDetail;
+window.deleteTx = deleteTx;
+window.doSearch = doSearch;
+
+// 예산 및 통계
+window.openBudgetModal = openBudgetModal;
+window.saveBudgets = saveBudgets;
+window.renderCalendarScreen = renderCalendarScreen;
+window.calPrevMonth = calPrevMonth;
+window.calNextMonth = calNextMonth;
+window.setStatsPeriod = setStatsPeriod;
+window.setStatsType = setStatsType;
+window.setReportPeriod = setReportPeriod;
+
 window.forceUpdateApp = async function() {
   if (navigator.serviceWorker) {
     const regs = await navigator.serviceWorker.getRegistrations();
@@ -25,7 +67,7 @@ window.forceUpdateApp = async function() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const CURRENT_VER = '1.058';
+    const CURRENT_VER = '1.059';
     if (localStorage.getItem('app-ver') !== CURRENT_VER) {
       localStorage.setItem('app-ver', CURRENT_VER);
       window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
@@ -38,7 +80,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAll();
     renderHome();
     renderCalendarScreen();
-    // setSearchDates 등 필요한 초기화 추가
+    
+    // 검색 날짜 초기화 (setSearchDates 대체)
     const elSearchFrom = document.getElementById('searchFrom');
     if (elSearchFrom) {
        const today = new Date();
@@ -46,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
        elSearchFrom.value = firstDay.toISOString().split('T')[0];
        document.getElementById('searchTo').value = today.toISOString().split('T')[0];
     }
+    
     setTimeout(checkDbStatus, 1500);
   } catch (err) {
     console.error('앱 초기화 오류:', err);
