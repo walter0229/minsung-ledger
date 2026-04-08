@@ -13,17 +13,26 @@ import { getTotalBalanceInBase, convertCurrency } from './sync.js';
 // =============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (localStorage.getItem('app-ver') !== APP_VERSION) {
-    localStorage.setItem('app-ver', APP_VERSION);
-    location.reload();
-    return;
+  try {
+    // 💡 버전이 다르면 캐시 무시하고 새로고침 (v1.057 고정)
+    const CURRENT_VER = '1.057';
+    if (localStorage.getItem('app-ver') !== CURRENT_VER) {
+      localStorage.setItem('app-ver', CURRENT_VER);
+      window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
+      return;
+    }
+
+    await loadAll();
+    initUI();
+    renderHome();
+    renderCalendarScreen();
+    setSearchDates();
+    setTimeout(checkDbStatus, 1500);
+  } catch (err) {
+    console.error('앱 초기화 오류:', err);
+    showLoading(false);
+    alert('❌ 데이터를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나, 네트워크 연결을 확인해주세요.\n\n오류: ' + err.message);
   }
-  await loadAll();
-  initUI();
-  renderHome();
-  renderCalendarScreen();
-  setSearchDates();
-  setTimeout(checkDbStatus, 1500);
 });
 
 export async function renderHome() {

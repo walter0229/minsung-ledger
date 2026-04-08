@@ -12,6 +12,29 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  // 🚀 Emergency Recovery Script (v1.057)
+  (function() {
+    const CURRENT_VER = '1.057';
+    const isRepair = window.location.search.includes('v=repair');
+    const storedVer = localStorage.getItem('app-ver');
+
+    if (isRepair || (storedVer && storedVer !== CURRENT_VER)) {
+      console.log('⚡ 서비스 워커 및 캐시 강제 초기화 시작...');
+      localStorage.clear();
+      localStorage.setItem('app-ver', CURRENT_VER);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for(let reg of regs) reg.unregister();
+        });
+      }
+      // 캐시 무시하고 리다이렉트
+      if (isRepair) {
+        window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
+      }
+    }
+  })();
+</script>
 </head>
 <body>
 
@@ -267,7 +290,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.055</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.057</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -518,6 +541,6 @@
 
 <!-- Appwrite Web SDK -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=1.057"></script>
 </body>
 </html>

@@ -5,9 +5,10 @@ import { db } from './db.js';
 // 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
 // =============================================
 
-// 앱 버전
-export const APP_VERSION = '1.052';
+// 앱 버전 (호환성 유지)
+export const APP_VERSION = '1.056';
 
+// 앱 상태 관리
 export const state = {
   transactions: [],
   accounts: [],
@@ -262,12 +263,30 @@ export async function parseReceipt(imageBase64) {
   const prompt = `이 영수증 이미지를 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트 없이 JSON만:
 {
   "date": "YYYY-MM-DD",
-  "amount": 숫자,
-  "currency": "VND 또는 KRW 등",
-  "merchant": "가게명",
-  "category": "식비 또는 쇼핑 등",
-  "items": ["항목1", "항목2"]
-}`;
+  "items": [
+    {
+      "name": "원래 품목명(영수증에 적힌 베트남어 등)",
+      "translatedName": "한국어 번역명(예: Bia -> 맥주)",
+      "count": 수량(숫자, 없으면 null),
+      "amount": 금액(숫자),
+      "mainCategory": "대분류",
+      "subCategory": "소분류"
+    }
+  ]
+}
+
+주의사항:
+1. "합계", "총액", "TOTAL", "Grand Total", "Total Amount", "Subtotal" 등 결제 총액이나 중간 합계는 **절대 포함하지 마세요**.
+2. "세금", "봉사료", "VAT", "Tax", "Service Charge" 등 부가 금액도 **절대 포함하지 마세요**.
+3. 오직 영수증에 적힌 **개별 상품(품목)의 이름과 금액**들만 리스트로 만들어주세요.
+4. 원래 품목명이 베트남어인 경우, 'translatedName' 필드에 한국어로 번역한 이름을 반드시 넣어주세요.
+5. 카테고리는 반드시 아래 목록 중에서 가장 적절한 것을 선택해줘:
+- 식비: [식사, 장보기, 음료/카페, 간식, 술]
+- 주거/생활: [아파트, 월세, 전기, 수도, 통신, 청소, 구독]
+- 사회생활/여가: [여가, 골프, 당구, 여행, 데이트, 선물, 헌금/기부, 팁(베트남), 수수료]
+- 자기개발/건강: [건강, 미용, 마사지, 반려동물, 담배, 로또]
+- 기타: [교통, 쇼핑, 대출, 신용카드, 임대료(달러), 데이터수정, 기타]
+- 한국: [가족용돈, 전화비, 월세, 관리비, 보험료, 경조사비, 기타]`;
   const text = await callGemini(prompt, imageBase64);
   try {
     const clean = text.replace(/```json|```/g, '').trim();

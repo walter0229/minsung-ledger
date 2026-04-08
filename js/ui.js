@@ -1,7 +1,7 @@
 import { db } from './db.js';
 import { state, toast, showLoading, parseReceipt } from './utils.js';
 import { store } from './store.js';
-import { APP_VERSION } from './config.js';
+import { APP_VERSION, CATEGORIES, MAIN_CAT_ICONS, ICONS } from './config.js';
 
 // =============================================
 // 민성이의 가계부 - 공통 UI 제어
@@ -121,44 +121,64 @@ export async function handleCameraInput(input) {
     toast('🔍 영수증 분석 중...', 'info');
     try {
       const data = await parseReceipt(base64);
-      if (data && data.amount) {
+      if (data && data.items && data.items.length > 0) {
         showLoading(true);
         // 신한은행 계좌 찾기 (없으면 첫 번째 계좌)
         const targetBank = state.accounts.find(a => a.name.includes('신한')) || state.accounts[0];
-        if (!targetBank) {
-          throw new Error('등록된 계좌가 없습니다.');
+        if (!targetBank) throw new Error('등록된 계좌가 없습니다.');
+
+        let totalSum = 0;
+        let successCount = 0;
+
+        for (const item of data.items) {
+          const mainCat = item.mainCategory || '기타';
+          const subCat = item.subCategory || '기타';
+          
+          // 아이콘 자동 매핑: 대분류 아이콘 우선, 소분류에 따른 아이콘 검색
+          let iconKey = MAIN_CAT_ICONS[mainCat] || 'etc';
+          if (CATEGORIES[mainCat]) {
+             const foundSub = CATEGORIES[mainCat].find(c => c.name === subCat);
+             if (foundSub) iconKey = foundSub.icon;
+          }
+
+          const itemName = (item.name || '').toLowerCase();
+          const skipKeywords = ['total', 'amount', 'tax', 'vat', 'service charge', '합계', '총액', '소계', '수수료', '봉사료'];
+          if (skipKeywords.some(k => itemName.includes(k))) continue;
+
+          let memo = item.name || '';
+          if (item.translatedName) memo += ` (${item.translatedName})`;
+          if (item.count) memo += ` (${item.count}개)`;
+
+          const txData = {
+            date: data.date || new Date().toISOString().slice(0, 10),
+            type: 'expense',
+            accountId: targetBank.$id,
+            amount: Math.round(Number(item.amount) || 0),
+            memo: memo.trim(),
+            mainCategory: mainCat,
+            subCategory: subCat,
+            iconKey: iconKey
+          };
+
+          try {
+            const saved = await db.createTransaction(txData);
+            state.transactions.unshift(saved);
+            totalSum += Number(item.amount);
+            successCount++;
+          } catch (e) {
+            console.error('개별 품목 저장 오류:', e, txData);
+          }
         }
-
-        // 카테고리 매핑 로직 (간단한 포함 여부 체크)
-        let mainCat = '기타';
-        let iconKey = 'etc';
-        const rawCat = (data.category || '').toLowerCase();
-        if (rawCat.includes('식비') || rawCat.includes('음식') || rawCat.includes('카페')) { mainCat = '식비'; iconKey = 'food'; }
-        else if (rawCat.includes('주거') || rawCat.includes('생활')) { mainCat = '주거/생활'; iconKey = 'housing'; }
-        else if (rawCat.includes('사회') || rawCat.includes('여가')) { mainCat = '사회생활/여가'; iconKey = 'leisure'; }
-        else if (rawCat.includes('건강') || rawCat.includes('자기개발')) { mainCat = '자기개발/건강'; iconKey = 'health'; }
-
-        const txData = {
-          date: data.date || new Date().toISOString().slice(0, 10),
-          type: 'expense',
-          accountId: targetBank.$id,
-          amount: Number(data.amount),
-          memo: data.merchant || '영수증 지출',
-          mainCategory: mainCat,
-          subCategory: '',
-          iconKey: iconKey
-        };
-
-        const saved = await db.createTransaction(txData);
-        state.transactions.unshift(saved);
+        
         showLoading(false);
 
-        // 출력 메시지 구성
-        const itemCount = data.items && data.items.length ? data.items.length : 1;
-        const totalAmountStr = Number(data.amount).toLocaleString();
-        const currencyStr = targetBank.currency || 'VND';
-        
-        alert(`✅ ${itemCount}개 입력되고, 총합계금액이 ${totalAmountStr} ${currencyStr} 입니다.`);
+        if (successCount > 0) {
+          const totalAmountStr = Math.round(totalSum).toLocaleString();
+          const currencyStr = targetBank.currency || 'VND';
+          alert(`✅ ${successCount}개 입력되고, 총합계금액이 ${totalAmountStr} ${currencyStr} 입니다.`);
+        } else {
+          toast('⚠️ 저장된 항목이 없습니다.', 'error');
+        }
         
         if (window.renderHome) window.renderHome();
       } else {
