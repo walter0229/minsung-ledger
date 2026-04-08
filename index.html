@@ -15,7 +15,7 @@
 <script>
   // 🚀 Emergency Recovery Script (v1.057)
   (function() {
-    const CURRENT_VER = '1.059';
+    const CURRENT_VER = '1.100';
     const isRepair = window.location.search.includes('v=repair');
     const storedVer = localStorage.getItem('app-ver');
 
@@ -34,6 +34,16 @@
       }
     }
   })();
+</script>
+
+<!-- UI 기능을 위한 전역 브릿지 (모듈 로드 전 클릭 에러 방지) -->
+<script>
+  window.showPage = function(id) { if(window.__showPage) window.__showPage(id); else console.warn('UI 아직 준비 안됨'); };
+  window.openModal = function(id) { if(window.__openModal) window.__openModal(id); };
+  window.closeModal = function(id) { if(window.__closeModal) window.__closeModal(id); };
+  window.openAddModal = function(id) { if(window.__openAddModal) window.__openAddModal(id); };
+  window.prevMonth = function() { if(window.__prevMonth) window.__prevMonth(); };
+  window.nextMonth = function() { if(window.__nextMonth) window.__nextMonth(); };
 </script>
 </head>
 <body>
@@ -546,6 +556,6 @@
 
 <!-- Appwrite Web SDK -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
-<script type="module" src="js/main.js?v=1.059"></script>
+<script type="module" src="js/main.js?v=1.100"></script>
 </body>
 </html>

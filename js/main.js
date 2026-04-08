@@ -17,12 +17,17 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const CURRENT_VER = '1.060';
+    const CURRENT_VER = '1.100';
     if (localStorage.getItem('app-ver') !== CURRENT_VER) {
       localStorage.setItem('app-ver', CURRENT_VER);
       window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
       return;
     }
+
+    // 초기화 루틴 실행 브릿지 활성화
+    window.__prevMonth = prevMonth;
+    window.__nextMonth = nextMonth;
+    window.__renderHome = renderHome;
 
     // 1. UI 및 진단 도구 초기화 (각 모달 자가등록 대기)
     if (window.initUI) window.initUI();

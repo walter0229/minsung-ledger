@@ -7,6 +7,11 @@ import { APP_VERSION, CATEGORIES, MAIN_CAT_ICONS, ICONS } from './config.js';
 // 민성이의 가계부 - 공통 UI 제어
 // =============================================
 
+// 브릿지 연결
+window.__showPage = showPage;
+window.__openModal = openModal;
+window.__closeModal = closeModal;
+
 export function initUI() {
   const elTxDate = document.getElementById('txDate');
   if(elTxDate) elTxDate.value = state.currentMonth + '-01';

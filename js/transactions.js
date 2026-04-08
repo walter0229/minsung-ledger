@@ -6,6 +6,9 @@ import { openModal, closeModal } from './ui.js';
 
 // renderHome은 main.js에서 순환 참조를 피하기 위해 window.renderHome을 사용합니다.
 
+// 브릿지 연결
+window.__openAddModal = openAddModal;
+
 // =============================================
 // 민성이의 가계부 - 거래 및 모달 관리
 // =============================================
