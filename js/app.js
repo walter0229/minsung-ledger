@@ -2169,12 +2169,8 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const CURRENT_VER = '1.401';
-    if (localStorage.getItem('app-ver') !== CURRENT_VER) {
-      localStorage.setItem('app-ver', CURRENT_VER);
-      window.location.href = window.location.origin + window.location.pathname + '?v=' + CURRENT_VER;
-      return;
-    }
+    // 버전을 localStorage에 기록 (리다이렉트 없음)
+    localStorage.setItem('app-ver', '1.401');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
