@@ -6,7 +6,7 @@
 // =============================================
 
 // 앱 버전 (호환성 유지)
-const APP_VERSION = '1.403';
+const APP_VERSION = '1.404';
 
 // 앱 상태 관리
 const state = {
@@ -146,26 +146,27 @@ function getBudgetStatus(yearMonth, period = 'monthly') {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23,59,59,999);
     txs = state.transactions.filter(t => {
-      const d = new Date(t.date);
-      return d >= startOfWeek && d <= endOfWeek && t.type === 'expense';
+      const d = (t.date || '').replace(/\./g, '-');
+      const dObj = new Date(d);
+      return dObj >= startOfWeek && dObj <= endOfWeek && t.type === 'expense';
     });
   } else if (period === 'yearly') {
     multiplier = 12;
-    txs = state.transactions.filter(t => t.date?.startsWith(String(y)) && t.type === 'expense');
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(String(y)) && t.type === 'expense');
   } else {
-    txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
   }
   
   return budgets.map(b => {
     let usedInVnd = 0;
     const isSub = b.subCategory && b.subCategory !== "";
+    const monthlyBudget = Number(b.amount || 0);
     
     txs.forEach(t => {
       const matchCat = t.mainCategory === b.category;
       if (matchCat && (!isSub || (t.subCategory === b.subCategory))) {
-        // 연간일 경우 1~3월은 실제 데이터 무시 (나중에 보정치로 더함)
         if (period === 'yearly') {
-          const tMonth = Number(t.date?.slice(5, 7));
+          const tMonth = Number((t.date || '').replace(/\./g, '-').slice(5, 7));
           if (tMonth > 3) {
             usedInVnd += (t.vndAmt || Number(t.amount));
           }
@@ -176,15 +177,16 @@ function getBudgetStatus(yearMonth, period = 'monthly') {
     });
 
     if (period === 'yearly') {
-      // 1,2,3월 지출 보정: 예산과 동일하게 3개월치 합산
-      usedInVnd += (Number(b.amount) * 3);
+      // 1,2,3월 지출 보정: 원본 월 예산 * 3 합산
+      usedInVnd += (monthlyBudget * 3);
     }
 
-    const periodBudget = Number(b.amount) * multiplier;
+    const periodBudget = monthlyBudget * multiplier;
 
     return { 
       ...b, 
-      amount: periodBudget,
+      monthlyAmount: monthlyBudget, // 명시적 보존
+      amount: periodBudget,         // 기간별 전체 예산
       used: usedInVnd, 
       percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
     };
@@ -2205,7 +2207,7 @@ window.forceUpdateApp = forceUpdateApp;
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 버전을 localStorage에 기록 (리다이렉트 없음)
-    localStorage.setItem('app-ver', '1.403');
+    localStorage.setItem('app-ver', '1.404');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;

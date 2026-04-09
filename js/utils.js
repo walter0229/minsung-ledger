@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전 (호환성 유지)
-export const APP_VERSION = '1.403';
+export const APP_VERSION = '1.404';
 
 // 앱 상태 관리
 export const state = {
@@ -146,25 +146,27 @@ export function getBudgetStatus(yearMonth, period = 'monthly') {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23,59,59,999);
     txs = state.transactions.filter(t => {
-      const d = new Date(t.date);
-      return d >= startOfWeek && d <= endOfWeek && t.type === 'expense';
+      const d = (t.date || '').replace(/\./g, '-');
+      const dObj = new Date(d);
+      return dObj >= startOfWeek && dObj <= endOfWeek && t.type === 'expense';
     });
   } else if (period === 'yearly') {
     multiplier = 12;
-    txs = state.transactions.filter(t => t.date?.startsWith(String(y)) && t.type === 'expense');
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(String(y)) && t.type === 'expense');
   } else {
-    txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
   }
   
   return budgets.map(b => {
     let usedInVnd = 0;
     const isSub = b.subCategory && b.subCategory !== "";
-    
+    const monthlyBudget = Number(b.amount || 0);
+
     txs.forEach(t => {
       const matchCat = t.mainCategory === b.category;
       if (matchCat && (!isSub || (t.subCategory === b.subCategory))) {
         if (period === 'yearly') {
-          const tMonth = Number(t.date?.slice(5, 7));
+          const tMonth = Number((t.date || '').replace(/\./g, '-').slice(5, 7));
           if (tMonth > 3) {
             usedInVnd += (t.vndAmt || Number(t.amount));
           }
@@ -175,13 +177,14 @@ export function getBudgetStatus(yearMonth, period = 'monthly') {
     });
 
     if (period === 'yearly') {
-      usedInVnd += (Number(b.amount) * 3);
+      usedInVnd += (monthlyBudget * 3);
     }
 
-    const periodBudget = Number(b.amount) * multiplier;
+    const periodBudget = monthlyBudget * multiplier;
 
     return { 
       ...b, 
+      monthlyAmount: monthlyBudget,
       amount: periodBudget,
       used: usedInVnd, 
       percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 

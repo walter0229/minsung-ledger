@@ -284,6 +284,14 @@ async function renderAnalysisCharts() {
   const used = labels.map(k => catMap[k].used);
   const budget = labels.map(k => catMap[k].budget);
   const timeProgress = getTimeProgress(store.reportPeriod === 'monthly' ? 'monthly' : store.reportPeriod === 'weekly' ? 'weekly' : 'yearly');
+  
+  // 🚀 예산 사용률 집계 강화 (대분류만 추출하여 합산)
+  const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
+  const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
+  const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
+  const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
+
+  console.log(`📊 [Report:${store.reportPeriod}] Budget:${totalBudget}, Used:${totalUsed}, UsageRate:${usagePct.toFixed(1)}%, TimeProgress:${timeProgress.toFixed(1)}%`);
 
   if (store.usageChart) store.usageChart.destroy();
   const ctx1 = document.getElementById('usageChart').getContext('2d');
@@ -303,12 +311,6 @@ async function renderAnalysisCharts() {
 
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
-  // 중복 합산 방지 (대분류만 필터링)
-  const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
-  const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
-  const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
-  const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
-
   if(window.Chart) {
     store.progressChart = new window.Chart(ctx2, {
       type: 'bar',
