@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <title>가계부 업데이트 중...</title>
     <script>
-        // v1.401: 강력한 캐시 초기화 및 진입점 변경
+        // v1.402: 강력한 캐시 초기화 및 진입점 변경
         (async function() {
-            console.log("🚀 캐시 무력화 및 새 버전(v1.401)으로 전환 시도...");
+            console.log("🚀 캐시 무력화 및 새 버전(v1.402)으로 전환 시도...");
             
             // 1. 모든 서비스 워커 등록 해제
             if ('serviceWorker' in navigator) {
@@ -35,10 +35,10 @@
             if(accounts) localStorage.setItem('ledger_accounts', accounts);
             if(budgets) localStorage.setItem('ledger_budgets', budgets);
 
-            localStorage.setItem('app-ver', '1.401');
+            localStorage.setItem('app-ver', '1.402');
 
             // 4. 새로운 진입점으로 강제 이동 (쿠키/캐시 무시를 위해 timestamp 추가)
-            window.location.href = "app.html?v=1.401&t=" + Date.now();
+            window.location.href = "app.html?v=1.402&t=" + Date.now();
         })();
     </script>
 </head>

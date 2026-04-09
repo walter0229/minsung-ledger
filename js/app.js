@@ -6,7 +6,7 @@
 // =============================================
 
 // 앱 버전 (호환성 유지)
-const APP_VERSION = '1.401';
+const APP_VERSION = '1.402';
 
 // 앱 상태 관리
 const state = {
@@ -43,8 +43,7 @@ function fmtMoney(amount, currency = 'VND') {
   const symbol = `<span class="money-symbol">${cur.symbol}${isNeg ? '-' : ''}</span>`;
   
   let formatted = '';
-  if (currency === 'VND') formatted = absN.toLocaleString('vi-VN');
-  else if (currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
+  if (currency === 'VND' || currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
   else formatted = absN.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   
   return symbol + formatted;
@@ -1854,9 +1853,9 @@ async function renderCalendarScreen() {
     monthlyCumulativeNet += dayNet;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
-    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fNet = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
+    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
+    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
+    const fNet = (v) => Math.round(v).toLocaleString();
 
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
       <div class="cal-num">${day}</div>
@@ -2170,7 +2169,7 @@ window.forceUpdateApp = forceUpdateApp;
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 버전을 localStorage에 기록 (리다이렉트 없음)
-    localStorage.setItem('app-ver', '1.401');
+    localStorage.setItem('app-ver', '1.402');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;

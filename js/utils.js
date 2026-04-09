@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전 (호환성 유지)
-export const APP_VERSION = '1.401';
+export const APP_VERSION = '1.402';
 
 // 앱 상태 관리
 export const state = {
@@ -43,8 +43,7 @@ export function fmtMoney(amount, currency = 'VND') {
   const symbol = `<span class="money-symbol">${cur.symbol}${isNeg ? '-' : ''}</span>`;
   
   let formatted = '';
-  if (currency === 'VND') formatted = absN.toLocaleString('vi-VN');
-  else if (currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
+  if (currency === 'VND' || currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
   else formatted = absN.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   
   return symbol + formatted;

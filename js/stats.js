@@ -472,9 +472,9 @@ export async function renderCalendarScreen() {
     monthlyCumulativeNet += dayNet;
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
-    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString().replace(/,/g,'.') : '';
-    const fNet = (v) => Math.round(v).toLocaleString().replace(/,/g,'.');
+    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
+    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
+    const fNet = (v) => Math.round(v).toLocaleString();
 
     html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
       <div class="cal-num">${day}</div>
