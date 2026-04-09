@@ -24,10 +24,22 @@ export function renderTxItem(t) {
   const cur = acc?.currency || 'VND';
   const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
   const cls = t.type;
+
+  let txDisplayName = t.memo || t.subCategory || t.mainCategory;
+  if (!txDisplayName) {
+    if (t.type === 'transfer') {
+      const fromAcc = findAccount(t.fromAccountId);
+      const toAcc = findAccount(t.toAccountId);
+      txDisplayName = `${fromAcc?.name || '?'} → ${toAcc?.name || '?'}`;
+    } else {
+      txDisplayName = '내역 없음';
+    }
+  }
+
   return `<div class="tx-item" onclick="window.showTxDetail('${t.$id}')">
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
-      <div class="tx-name">${t.memo || t.subCategory || t.mainCategory || '내역 없음'}</div>
+      <div class="tx-name">${txDisplayName}</div>
       <div class="tx-cat">${t.mainCategory || ''} ${t.subCategory ? '> ' + t.subCategory : ''}</div>
     </div>
     <div class="tx-amount ${cls}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
@@ -314,11 +326,22 @@ export function doSearch() {
     else if (t.mainCategory && MAIN_CAT_ICONS[t.mainCategory]) defaultIcon = MAIN_CAT_ICONS[t.mainCategory];
     const iconKey = t.iconKey && t.iconKey !== 'etc' ? t.iconKey : defaultIcon;
 
+    let txDisplayName = t.memo || t.subCategory || t.mainCategory;
+    if (!txDisplayName) {
+      if (t.type === 'transfer') {
+        const fromAcc = findAccount(t.fromAccountId);
+        const toAcc = findAccount(t.toAccountId);
+        txDisplayName = `${fromAcc?.name || '?'} → ${toAcc?.name || '?'}`;
+      } else {
+        txDisplayName = '-';
+      }
+    }
+
     return `<div class="report-tx-item" onclick="window.showTxDetail('${t.$id}')">
       <div class="report-tx-date">${fmtDate(t.date?.slice(0,10))}</div>
       <div style="display:flex;align-items:center;gap:8px;flex:1;">
         <div class="report-tx-icon" style="width:24px;height:24px;flex-shrink:0;">${iconImg(iconKey, 24)}</div>
-        <div class="report-tx-name">${t.memo || t.subCategory || t.mainCategory || '-'}</div>
+        <div class="report-tx-name">${txDisplayName}</div>
       </div>
       <div class="report-tx-amount" style="color:${t.type==='income'?'var(--income)':t.type==='transfer'?'var(--transfer)':'var(--expense)'}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
     </div>`;
