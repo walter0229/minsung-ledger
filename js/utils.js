@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전 (호환성 유지)
-export const APP_VERSION = '1.402';
+export const APP_VERSION = '1.403';
 
 // 앱 상태 관리
 export const state = {
@@ -128,10 +128,33 @@ export function getMonthSummary(yearMonth) {
 }
 
 // ── 예산 대비 사용 ─────────────────────────
-export function getBudgetStatus(yearMonth) {
+export function getBudgetStatus(yearMonth, period = 'monthly') {
   const month = (yearMonth || '').replace(/\./g, '-');
+  const [y, m] = month.split('-').map(Number);
   const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
-  const txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+  
+  let txs = [];
+  let multiplier = 1;
+  const now = new Date();
+
+  if (period === 'weekly') {
+    multiplier = 0.25;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
+    startOfWeek.setHours(0,0,0,0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23,59,59,999);
+    txs = state.transactions.filter(t => {
+      const d = new Date(t.date);
+      return d >= startOfWeek && d <= endOfWeek && t.type === 'expense';
+    });
+  } else if (period === 'yearly') {
+    multiplier = 12;
+    txs = state.transactions.filter(t => t.date?.startsWith(String(y)) && t.type === 'expense');
+  } else {
+    txs = state.transactions.filter(t => t.date?.startsWith(month) && t.type === 'expense');
+  }
   
   return budgets.map(b => {
     let usedInVnd = 0;
@@ -139,18 +162,29 @@ export function getBudgetStatus(yearMonth) {
     
     txs.forEach(t => {
       const matchCat = t.mainCategory === b.category;
-      // 소분류가 있는 예산이면 소분류까지 일치해야 하고, 대분류 예산이면 해당 카테고리 전체를 포함
-      if (matchCat) {
-        if (!isSub || (t.subCategory === b.subCategory)) {
+      if (matchCat && (!isSub || (t.subCategory === b.subCategory))) {
+        if (period === 'yearly') {
+          const tMonth = Number(t.date?.slice(5, 7));
+          if (tMonth > 3) {
+            usedInVnd += (t.vndAmt || Number(t.amount));
+          }
+        } else {
           usedInVnd += (t.vndAmt || Number(t.amount));
         }
       }
     });
 
+    if (period === 'yearly') {
+      usedInVnd += (Number(b.amount) * 3);
+    }
+
+    const periodBudget = Number(b.amount) * multiplier;
+
     return { 
       ...b, 
+      amount: periodBudget,
       used: usedInVnd, 
-      percent: b.amount > 0 ? (usedInVnd / b.amount * 100).toFixed(1) : 0 
+      percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
     };
   });
 }

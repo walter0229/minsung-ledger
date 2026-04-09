@@ -24,6 +24,10 @@ export function setStatsType(t, btn) {
 
 function getStatsTxs() {
   const now = new Date();
+  if (store.statsPeriod === 'yearly') {
+    const year = state.currentMonth.split('-')[0];
+    return state.transactions.filter(t => (t.date || '').startsWith(year) && t.type === store.statsType);
+  }
   if (store.statsPeriod === 'monthly') {
     const month = state.currentMonth; // YYYY-MM
     return state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month.replace(/\./g, '-')) && t.type === store.statsType);
@@ -31,7 +35,10 @@ function getStatsTxs() {
   // 주간 (현재 주)
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
-  const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
+  startOfWeek.setHours(0,0,0,0);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23,59,59,999);
   return state.transactions.filter(t => {
     const d = new Date(t.date);
     return d >= startOfWeek && d <= endOfWeek && t.type === store.statsType;
@@ -114,7 +121,7 @@ async function renderBudgetBars() {
   const el = document.getElementById('budgetBars');
   if(!el) return;
   
-  const status = getBudgetStatus(state.currentMonth);
+  const status = getBudgetStatus(state.currentMonth, store.statsPeriod);
   
   if (!status.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">예산을 설정해주세요</div>';
@@ -224,7 +231,25 @@ export async function renderReportScreen() {
 
 async function renderAnalysisCharts() {
   const baseCur = 'VND';
-  const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  let txs = [];
+  const now = new Date();
+  if (store.reportPeriod === 'yearly') {
+    const year = state.currentMonth.split('-')[0];
+    txs = state.transactions.filter(t => t.date?.startsWith(year));
+  } else if (store.reportPeriod === 'weekly') {
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
+    startOfWeek.setHours(0,0,0,0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23,59,59,999);
+    txs = state.transactions.filter(t => {
+      const d = new Date(t.date);
+      return d >= startOfWeek && d <= endOfWeek;
+    });
+  } else {
+    txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  }
 
   // 환율 변환 먼저 완료 (KRW 등 타 통화 정확히 처리)
   for (const t of txs) {
@@ -233,7 +258,7 @@ async function renderAnalysisCharts() {
     t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
   }
 
-  const status = getBudgetStatus(state.currentMonth);
+  const status = getBudgetStatus(state.currentMonth, store.reportPeriod);
   // 대분류별로 그룹화 (여러 개의 소분류 예산이 있을 경우 합산)
   const catMap = {};
   // 1단계: 대분류 예산이 있는 항목들 먼저 등록
