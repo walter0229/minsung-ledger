@@ -6,7 +6,7 @@
 // =============================================
 
 // 앱 버전 (호환성 유지)
-const APP_VERSION = '1.404';
+const APP_VERSION = '1.405';
 
 // 앱 상태 관리
 const state = {
@@ -1533,7 +1533,7 @@ async function renderBudgetBars() {
   const el = document.getElementById('budgetBars');
   if(!el) return;
   
-  const status = getBudgetStatus(state.currentMonth);
+  const status = getBudgetStatus(state.currentMonth, store.statsPeriod);
   
   if (!status.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">예산을 설정해주세요</div>';
@@ -1643,7 +1643,25 @@ async function renderReportScreen() {
 
 async function renderAnalysisCharts() {
   const baseCur = 'VND';
-  const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  let txs = [];
+  const now = new Date();
+  if (store.reportPeriod === 'yearly') {
+    const year = state.currentMonth.split('-')[0];
+    txs = state.transactions.filter(t => t.date?.startsWith(year));
+  } else if (store.reportPeriod === 'weekly') {
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
+    startOfWeek.setHours(0,0,0,0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23,59,59,999);
+    txs = state.transactions.filter(t => {
+      const d = new Date(t.date);
+      return d >= startOfWeek && d <= endOfWeek;
+    });
+  } else {
+    txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  }
 
   // 환율 변환 먼저 완료 (KRW 등 타 통화 정확히 처리)
   for (const t of txs) {
@@ -1652,7 +1670,7 @@ async function renderAnalysisCharts() {
     t.vndAmt = await convertCurrency(Number(t.amount), cur, baseCur);
   }
 
-  const status = getBudgetStatus(state.currentMonth);
+  const status = getBudgetStatus(state.currentMonth, store.reportPeriod);
   // 대분류별로 그룹화 (여러 개의 소분류 예산이 있을 경우 합산)
   const catMap = {};
   // 1단계: 대분류 예산이 있는 항목들 먼저 등록
@@ -1678,6 +1696,14 @@ async function renderAnalysisCharts() {
   const used = labels.map(k => catMap[k].used);
   const budget = labels.map(k => catMap[k].budget);
   const timeProgress = getTimeProgress(store.reportPeriod === 'monthly' ? 'monthly' : store.reportPeriod === 'weekly' ? 'weekly' : 'yearly');
+  
+  // 🚀 예산 사용률 집계 강화 (대분류만 추출하여 합산)
+  const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
+  const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
+  const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
+  const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
+
+  console.log(`📊 [Monolith-Report:${store.reportPeriod}] Budget:${totalBudget}, Used:${totalUsed}, UsageRate:${usagePct.toFixed(1)}%, TimeProgress:${timeProgress.toFixed(1)}%`);
 
   if (store.usageChart) store.usageChart.destroy();
   const ctx1 = document.getElementById('usageChart').getContext('2d');
@@ -1697,12 +1723,6 @@ async function renderAnalysisCharts() {
 
   if (store.progressChart) store.progressChart.destroy();
   const ctx2 = document.getElementById('progressChart').getContext('2d');
-  // 중복 합산 방지 (대분류만 필터링)
-  const topLevelStatus = status.filter(b => !b.subCategory || b.subCategory === "");
-  const totalBudget = topLevelStatus.reduce((s, b) => s + Number(b.amount || 0), 0);
-  const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
-  const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
-
   if(window.Chart) {
     store.progressChart = new window.Chart(ctx2, {
       type: 'bar',
@@ -2207,7 +2227,7 @@ window.forceUpdateApp = forceUpdateApp;
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 버전을 localStorage에 기록 (리다이렉트 없음)
-    localStorage.setItem('app-ver', '1.404');
+    localStorage.setItem('app-ver', '1.405');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;

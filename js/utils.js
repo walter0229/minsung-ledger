@@ -6,7 +6,7 @@ import { db } from './db.js';
 // =============================================
 
 // 앱 버전 (호환성 유지)
-export const APP_VERSION = '1.404';
+export const APP_VERSION = '1.405';
 
 // 앱 상태 관리
 export const state = {
