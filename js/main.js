@@ -17,7 +17,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    localStorage.setItem('app-ver', '1.405');
+    localStorage.setItem('app-ver', '1.406');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;

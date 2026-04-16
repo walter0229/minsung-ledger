@@ -2227,7 +2227,7 @@ window.forceUpdateApp = forceUpdateApp;
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 버전을 localStorage에 기록 (리다이렉트 없음)
-    localStorage.setItem('app-ver', '1.405');
+    localStorage.setItem('app-ver', '1.406');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;

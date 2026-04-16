@@ -4,41 +4,51 @@
     <meta charset="UTF-8">
     <title>가계부 업데이트 중...</title>
     <script>
-        // v1.405: 강력한 캐시 초기화 및 진입점 변경
+        // v1.406: 파일(file://) 모드 호환성 강화 및 강제 리다이렉트
         (async function() {
-            console.log("🚀 캐시 무력화 및 새 버전(v1.405)으로 전환 시도...");
+            console.log("🚀 가계부 진입 시도...");
             
-            // 1. 모든 서비스 워커 등록 해제
-            if ('serviceWorker' in navigator) {
-                const regs = await navigator.serviceWorker.getRegistrations();
-                for(let reg of regs) {
-                    await reg.unregister();
+            // 안전 장치: 3초 뒤에도 안 넘어가면 강제 이동
+            const forceRedirect = setTimeout(() => {
+                window.location.href = "app.html?v=1.406";
+            }, 3000);
+
+            try {
+                // 1. 모든 서비스 워커 등록 해제 (에러 무시)
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations().catch(() => []);
+                    for(let reg of regs) {
+                        await reg.unregister().catch(() => {});
+                    }
                 }
-            }
-            
-            // 2. 모든 캐시 스토리지 삭제
-            if ('caches' in window) {
-                const names = await caches.keys();
-                for(let name of names) {
-                    await caches.delete(name);
+                
+                // 2. 모든 캐시 스토리지 삭제 (에러 무시)
+                if ('caches' in window) {
+                    const names = await caches.keys().catch(() => []);
+                    for(let name of names) {
+                        await caches.delete(name).catch(() => {});
+                    }
                 }
+
+                // 3. 로컬 스토리지 데이터 유지 및 초기화
+                const settings = localStorage.getItem('ledger_app-settings');
+                const accounts = localStorage.getItem('ledger_accounts');
+                const budgets = localStorage.getItem('ledger_budgets');
+                
+                localStorage.clear();
+                
+                if(settings) localStorage.setItem('ledger_app-settings', settings);
+                if(accounts) localStorage.setItem('ledger_accounts', accounts);
+                if(budgets) localStorage.setItem('ledger_budgets', budgets);
+
+                localStorage.setItem('app-ver', '1.406');
+            } catch (e) {
+                console.warn("초기화 과정 중 오류 발생(무시됨):", e.message);
             }
 
-            // 3. 로컬 스토리지 초기화 (중요 설정 제외 가능하지만 여기서는 전부 정화)
-            const settings = localStorage.getItem('ledger_app-settings');
-            const accounts = localStorage.getItem('ledger_accounts');
-            const budgets = localStorage.getItem('ledger_budgets');
-            localStorage.clear();
-            
-            // 데이터 복구 (설정 및 기초 데이터 유지를 시도)
-            if(settings) localStorage.setItem('ledger_app-settings', settings);
-            if(accounts) localStorage.setItem('ledger_accounts', accounts);
-            if(budgets) localStorage.setItem('ledger_budgets', budgets);
-
-            localStorage.setItem('app-ver', '1.405');
-
-            // 4. 새로운 진입점으로 강제 이동 (쿠키/캐시 무시를 위해 timestamp 추가)
-            window.location.href = "app.html?v=1.405&t=" + Date.now();
+            // 4. 새로운 진입점으로 강제 이동
+            clearTimeout(forceRedirect);
+            window.location.href = "app.html?v=1.406&t=" + Date.now();
         })();
     </script>
 </head>
