@@ -5,8 +5,7 @@ import { db } from './db.js';
 // 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
 // =============================================
 
-// 앱 버전 (호환성 유지)
-export const APP_VERSION = '1.405';
+// 앱 버전을 config.js에 통합
 
 // 앱 상태 관리
 export const state = {

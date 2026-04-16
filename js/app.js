@@ -1,349 +1,9 @@
 
 
-
 // =============================================
-// 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
+// 📦 MERGED FROM: config.js
 // =============================================
 
-// 앱 버전 (호환성 유지)
-const APP_VERSION = '1.406';
-
-// 앱 상태 관리
-const state = {
-  transactions: [],
-  accounts: [],
-  budgets: [],
-  settings: {
-    geminiApiKey: '',
-    theme: 'dark',
-    reminderEnabled: false,
-    reminderTime: '09:00',
-  },
-  currentTab: 'home',
-  currentMonth: new Date().toISOString().slice(0, 7),
-  calendarDate: new Date(),
-};
-
-// ── 날짜 유틸 ──────────────────────────────
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function monthStr(d = new Date()) { return d.toISOString().slice(0, 7); }
-function fmtDate(s) {
-  if (!s) return '';
-  const d = new Date(s);
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-}
-function fmtMoney(amount, currency = 'VND') {
-  const cur = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
-  const n = Math.round(Number(amount) || 0);
-  const isNeg = n < 0;
-  const absN = Math.abs(n);
-  const symbol = `<span class="money-symbol">${cur.symbol}${isNeg ? '-' : ''}</span>`;
-  
-  let formatted = '';
-  if (currency === 'VND' || currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
-  else formatted = absN.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  
-  return symbol + formatted;
-}
-function getDaysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
-function getWeekNumber(d) {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-}
-
-// ── 데이터 로딩 ────────────────────────────
-async function loadAll() {
-  showLoading(true);
-  try {
-    await db.ready; // DB 초기화 완료까지 대기
-    const [txs, accs, buds] = await Promise.all([
-      db.listTransactions(),
-      db.listAccounts(),
-      db.listBudgets(),
-    ]);
-    // 데이터 중복 제거 (ID 기준)
-    const unique = (arr) => {
-      const seen = new Set();
-      return arr.filter(item => {
-        if (!item.$id) return true; // ID 없는 경우(드문 경우) 유지
-        if (seen.has(item.$id)) return false;
-        seen.add(item.$id);
-        return true;
-      });
-    };
-
-    state.accounts = unique(accs);
-    state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
-    
-    // 예산 데이터 중복 제거 (ID가 다르더라도 내용 - 년월, 대분류, 소분류 - 이 같으면 중복으로 간주)
-    const budgetMap = {};
-    unique(buds).forEach(b => {
-      const ym = (b.yearMonth||'').replace(/\./g,'-');
-      const cat = b.category || '기타';
-      const sub = b.subCategory || '';
-      const key = `${ym}_${cat}_${sub}`;
-      // 이미 같은 키의 예산이 있다면, 나중 것(Appwrite 특성상 더 최신일 가능성)으로 덮어씀
-      budgetMap[key] = b;
-    });
-    state.budgets = Object.values(budgetMap);
-
-    
-    const s = await db.getSettings();
-    if (s) Object.assign(state.settings, s);
-    applyTheme(state.settings.theme || 'dark');
-  } catch(e) {
-    console.error('데이터 로딩 오류:', e);
-  }
-  showLoading(false);
-}
-
-// ── 계좌 잔액 계산 ─────────────────────────
-function calcBalance(accountId) {
-  let bal = 0;
-  for (const t of state.transactions) {
-    if (t.type === 'income' && t.accountId === accountId) bal += Number(t.amount);
-    if (t.type === 'expense' && t.accountId === accountId) bal -= Number(t.amount);
-    if (t.type === 'transfer') {
-      if (t.fromAccountId === accountId) bal -= Number(t.amount);
-      if (t.toAccountId === accountId) bal += Number(t.amount);
-    }
-  }
-  return bal;
-}
-
-// ── 월별 집계 ──────────────────────────────
-function getMonthSummary(yearMonth) {
-  const txs = state.transactions.filter(t => t.date?.startsWith(yearMonth));
-  const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-  return { income, expense, balance: income - expense, txs };
-}
-
-// ── 예산 대비 사용 ─────────────────────────
-function getBudgetStatus(yearMonth, period = 'monthly') {
-  const month = (yearMonth || '').replace(/\./g, '-');
-  const [y, m] = month.split('-').map(Number);
-  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
-  
-  let txs = [];
-  let multiplier = 1;
-  const now = new Date();
-
-  if (period === 'weekly') {
-    multiplier = 0.25;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
-    startOfWeek.setHours(0,0,0,0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23,59,59,999);
-    txs = state.transactions.filter(t => {
-      const d = (t.date || '').replace(/\./g, '-');
-      const dObj = new Date(d);
-      return dObj >= startOfWeek && dObj <= endOfWeek && t.type === 'expense';
-    });
-  } else if (period === 'yearly') {
-    multiplier = 12;
-    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(String(y)) && t.type === 'expense');
-  } else {
-    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
-  }
-  
-  return budgets.map(b => {
-    let usedInVnd = 0;
-    const isSub = b.subCategory && b.subCategory !== "";
-    const monthlyBudget = Number(b.amount || 0);
-    
-    txs.forEach(t => {
-      const matchCat = t.mainCategory === b.category;
-      if (matchCat && (!isSub || (t.subCategory === b.subCategory))) {
-        if (period === 'yearly') {
-          const tMonth = Number((t.date || '').replace(/\./g, '-').slice(5, 7));
-          if (tMonth > 3) {
-            usedInVnd += (t.vndAmt || Number(t.amount));
-          }
-        } else {
-          usedInVnd += (t.vndAmt || Number(t.amount));
-        }
-      }
-    });
-
-    if (period === 'yearly') {
-      // 1,2,3월 지출 보정: 원본 월 예산 * 3 합산
-      usedInVnd += (monthlyBudget * 3);
-    }
-
-    const periodBudget = monthlyBudget * multiplier;
-
-    return { 
-      ...b, 
-      monthlyAmount: monthlyBudget, // 명시적 보존
-      amount: periodBudget,         // 기간별 전체 예산
-      used: usedInVnd, 
-      percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
-    };
-  });
-}
-
-
-// ── 카테고리별 지출 통계 ────────────────────
-function getCategoryStats(txs) {
-  const map = {};
-  for (const t of txs.filter(t => t.type === 'expense')) {
-    const k = t.mainCategory || '기타';
-    map[k] = (map[k] || 0) + Number(t.amount);
-  }
-  return Object.entries(map).sort((a, b) => b[1] - a[1]);
-}
-
-// ── 시간 경과율 ────────────────────────────
-function getTimeProgress(period, refDate = new Date()) {
-  if (period === 'yearly') {
-    const start = new Date(refDate.getFullYear(), 0, 1);
-    const end = new Date(refDate.getFullYear(), 11, 31);
-    return (refDate - start) / (end - start) * 100;
-  }
-  if (period === 'monthly') {
-    const days = getDaysInMonth(refDate.getFullYear(), refDate.getMonth());
-    return (refDate.getDate() - 1) / days * 100;
-  }
-  // weekly
-  const dow = refDate.getDay() || 7;
-  return (dow - 1) / 6 * 100;
-}
-
-// ── 테마 적용 ──────────────────────────────
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  state.settings.theme = theme;
-}
-
-// ── 로딩 스피너 ────────────────────────────
-function showLoading(show) {
-  const el = document.getElementById('loadingOverlay');
-  if (el) el.style.display = show ? 'flex' : 'none';
-}
-
-// ── Toast 알림 ─────────────────────────────
-function toast(msg, type = 'success') {
-  const t = document.createElement('div');
-  t.className = `toast toast-${type}`;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.classList.add('show'), 10);
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2500);
-}
-
-// ── 숫자 포맷 입력 ─────────────────────────
-function formatNumberInput(input) {
-  const v = input.value.replace(/[^0-9]/g, '');
-  input.value = v ? Number(v).toLocaleString() : '';
-  input.dataset.raw = v;
-}
-
-// ── Gemini AI 호출 ─────────────────────────
-async function callGemini(prompt, imageBase64 = null) {
-  const apiKey = state.settings.geminiApiKey;
-  if (!apiKey) throw new Error('Gemini API Key가 설정되지 않았습니다.');
-  
-  // 사용자 지침에 따라 1.5 / 2 버전은 절대 사용하지 않음
-  // 첫 번째 시도: gemini-3.1-pro
-  let model = GEMINI_MODEL; 
-  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const parts = [{ text: prompt }];
-  if (imageBase64) {
-    parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
-  }
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
-    });
-    
-    if (!res.ok) {
-       // 3.1-pro-preview 실패 시 3-flash-preview로 재시도
-       if (model === 'gemini-3.1-pro-preview') {
-         console.warn('⚠️ gemini-3.1-pro-preview 호출 실패, gemini-3-flash-preview로 재시도합니다.');
-         model = 'gemini-3-flash-preview';
-         url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-         const resRetry = await fetch(url, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ contents: [{ parts }] }),
-         });
-         if (!resRetry.ok) throw new Error(`Gemini API 오류 (${model}): ` + resRetry.statusText);
-         const dataRetry = await resRetry.json();
-         return dataRetry.candidates?.[0]?.content?.parts?.[0]?.text || '';
-       }
-       throw new Error(`Gemini API 오류 (${model}): ` + res.statusText);
-    }
-    
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  } catch (e) {
-    throw e;
-  }
-}
-
-// ── 영수증 OCR 파싱 ────────────────────────
-async function parseReceipt(imageBase64) {
-  const prompt = `이 영수증 이미지를 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트 없이 JSON만:
-{
-  "date": "YYYY-MM-DD",
-  "items": [
-    {
-      "name": "원래 품목명(영수증에 적힌 베트남어 등)",
-      "translatedName": "한국어 번역명(예: Bia -> 맥주)",
-      "count": 수량(숫자, 없으면 null),
-      "amount": 금액(숫자),
-      "mainCategory": "대분류",
-      "subCategory": "소분류"
-    }
-  ]
-}
-
-주의사항:
-1. "합계", "총액", "TOTAL", "Grand Total", "Total Amount", "Subtotal" 등 결제 총액이나 중간 합계는 **절대 포함하지 마세요**.
-2. "세금", "봉사료", "VAT", "Tax", "Service Charge" 등 부가 금액도 **절대 포함하지 마세요**.
-3. 오직 영수증에 적힌 **개별 상품(품목)의 이름과 금액**들만 리스트로 만들어주세요.
-4. 원래 품목명이 베트남어인 경우, 'translatedName' 필드에 한국어로 번역한 이름을 반드시 넣어주세요.
-5. 카테고리는 반드시 아래 목록 중에서 가장 적절한 것을 선택해줘:
-- 식비: [식사, 장보기, 음료/카페, 간식, 술]
-- 주거/생활: [아파트, 월세, 전기, 수도, 통신, 청소, 구독]
-- 사회생활/여가: [여가, 골프, 당구, 여행, 데이트, 선물, 헌금/기부, 팁(베트남), 수수료]
-- 자기개발/건강: [건강, 미용, 마사지, 반려동물, 담배, 로또]
-- 기타: [교통, 쇼핑, 대출, 신용카드, 임대료(달러), 데이터수정, 기타]
-- 한국: [가족용돈, 전화비, 월세, 관리비, 보험료, 경조사비, 기타]`;
-  const text = await callGemini(prompt, imageBase64);
-  try {
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
-  } catch {
-    return null;
-  }
-}
-
-// ── 아이콘 img 태그 생성 ────────────────────
-function iconImg(key, size = 32, cls = '') {
-  const src = ICONS[key] || ICONS.etc;
-  return `<img src="${src}" width="${size}" height="${size}" class="icon-img ${cls}" alt="${key}" onerror="this.style.display='none'">`;
-}
-
-// ── 계좌 찾기 ──────────────────────────────
-function findAccount(id) { return state.accounts.find(a => a.$id === id); }
-function getCurrencySymbol(code) {
-  return CURRENCIES.find(c => c.code === code)?.symbol || code;
-}
 // =============================================
 // 민성이의 가계부 - 설정 파일
 // =============================================
@@ -515,7 +175,389 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-// Duplicate removed: const APP_VERSION = '1.320';
+const APP_VERSION = '1.407';
+
+
+// =============================================
+// 📦 MERGED FROM: store.js
+// =============================================
+
+// =============================================
+// 민성이의 가계부 - 전역 상태 로컬 보관소
+// =============================================
+
+const store = {
+  currentTxType: 'expense',
+  selectedTxAccountId: null,
+  selectedTxIcon: null,
+  selectedTransferFrom: null,
+  selectedTransferTo: null,
+  selectedCurrencyIcon: null,
+  selectedBankIcon: null,
+  editingTxId: null,
+  statsPeriod: 'monthly',
+  statsType: 'expense',
+  reportPeriod: 'monthly',
+  donutChart: null,
+  usageChart: null,
+  progressChart: null,
+  assetChart: null,
+  balanceTrendChart: null,
+};
+
+
+// =============================================
+// 📦 MERGED FROM: utils.js
+// =============================================
+
+
+
+// =============================================
+// 민성이의 가계부 - 상태 관리 & 유틸 (모듈 버전)
+// =============================================
+
+// 앱 버전을 config.js에 통합
+
+// 앱 상태 관리
+const state = {
+  transactions: [],
+  accounts: [],
+  budgets: [],
+  settings: {
+    geminiApiKey: '',
+    theme: 'dark',
+    reminderEnabled: false,
+    reminderTime: '09:00',
+  },
+  currentTab: 'home',
+  currentMonth: new Date().toISOString().slice(0, 7),
+  calendarDate: new Date(),
+};
+
+// ── 날짜 유틸 ──────────────────────────────
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function monthStr(d = new Date()) { return d.toISOString().slice(0, 7); }
+function fmtDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtMoney(amount, currency = 'VND') {
+  const cur = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
+  const n = Math.round(Number(amount) || 0);
+  const isNeg = n < 0;
+  const absN = Math.abs(n);
+  const symbol = `<span class="money-symbol">${cur.symbol}${isNeg ? '-' : ''}</span>`;
+  
+  let formatted = '';
+  if (currency === 'VND' || currency === 'KRW') formatted = absN.toLocaleString('ko-KR');
+  else formatted = absN.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  
+  return symbol + formatted;
+}
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+function getWeekNumber(d) {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+// ── 데이터 로딩 ────────────────────────────
+async function loadAll() {
+  showLoading(true);
+  try {
+    await db.ready; // DB 초기화 완료까지 대기
+    const [txs, accs, buds] = await Promise.all([
+      db.listTransactions(),
+      db.listAccounts(),
+      db.listBudgets(),
+    ]);
+    // 데이터 중복 제거 (ID 기준)
+    const unique = (arr) => {
+      const seen = new Set();
+      return arr.filter(item => {
+        if (!item.$id) return true; // ID 없는 경우(드문 경우) 유지
+        if (seen.has(item.$id)) return false;
+        seen.add(item.$id);
+        return true;
+      });
+    };
+
+    state.accounts = unique(accs);
+    state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
+    
+    // 예산 데이터 중복 제거 (ID가 다르더라도 내용 - 년월, 대분류, 소분류 - 이 같으면 중복으로 간주)
+    const budgetMap = {};
+    unique(buds).forEach(b => {
+      const ym = (b.yearMonth||'').replace(/\./g,'-');
+      const cat = b.category || '기타';
+      const sub = b.subCategory || '';
+      const key = `${ym}_${cat}_${sub}`;
+      // 이미 같은 키의 예산이 있다면, 나중 것(Appwrite 특성상 더 최신일 가능성)으로 덮어씀
+      budgetMap[key] = b;
+    });
+    state.budgets = Object.values(budgetMap);
+
+    
+    const s = await db.getSettings();
+    if (s) Object.assign(state.settings, s);
+    applyTheme(state.settings.theme || 'dark');
+  } catch(e) {
+    console.error('데이터 로딩 오류:', e);
+  }
+  showLoading(false);
+}
+
+// ── 계좌 잔액 계산 ─────────────────────────
+function calcBalance(accountId) {
+  let bal = 0;
+  for (const t of state.transactions) {
+    if (t.type === 'income' && t.accountId === accountId) bal += Number(t.amount);
+    if (t.type === 'expense' && t.accountId === accountId) bal -= Number(t.amount);
+    if (t.type === 'transfer') {
+      if (t.fromAccountId === accountId) bal -= Number(t.amount);
+      if (t.toAccountId === accountId) bal += Number(t.amount);
+    }
+  }
+  return bal;
+}
+
+// ── 월별 집계 ──────────────────────────────
+function getMonthSummary(yearMonth) {
+  const txs = state.transactions.filter(t => t.date?.startsWith(yearMonth));
+  const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  return { income, expense, balance: income - expense, txs };
+}
+
+// ── 예산 대비 사용 ─────────────────────────
+function getBudgetStatus(yearMonth, period = 'monthly') {
+  const month = (yearMonth || '').replace(/\./g, '-');
+  const [y, m] = month.split('-').map(Number);
+  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
+  
+  let txs = [];
+  let multiplier = 1;
+  const now = new Date();
+
+  if (period === 'weekly') {
+    multiplier = 0.25;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
+    startOfWeek.setHours(0,0,0,0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23,59,59,999);
+    txs = state.transactions.filter(t => {
+      const d = (t.date || '').replace(/\./g, '-');
+      const dObj = new Date(d);
+      return dObj >= startOfWeek && dObj <= endOfWeek && t.type === 'expense';
+    });
+  } else if (period === 'yearly') {
+    multiplier = 12;
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(String(y)) && t.type === 'expense');
+  } else {
+    txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
+  }
+  
+  return budgets.map(b => {
+    let usedInVnd = 0;
+    const isSub = b.subCategory && b.subCategory !== "";
+    const monthlyBudget = Number(b.amount || 0);
+
+    txs.forEach(t => {
+      const matchCat = t.mainCategory === b.category;
+      if (matchCat && (!isSub || (t.subCategory === b.subCategory))) {
+        if (period === 'yearly') {
+          const tMonth = Number((t.date || '').replace(/\./g, '-').slice(5, 7));
+          if (tMonth > 3) {
+            usedInVnd += (t.vndAmt || Number(t.amount));
+          }
+        } else {
+          usedInVnd += (t.vndAmt || Number(t.amount));
+        }
+      }
+    });
+
+    if (period === 'yearly') {
+      usedInVnd += (monthlyBudget * 3);
+    }
+
+    const periodBudget = monthlyBudget * multiplier;
+
+    return { 
+      ...b, 
+      monthlyAmount: monthlyBudget,
+      amount: periodBudget,
+      used: usedInVnd, 
+      percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
+    };
+  });
+}
+
+
+// ── 카테고리별 지출 통계 ────────────────────
+function getCategoryStats(txs) {
+  const map = {};
+  for (const t of txs.filter(t => t.type === 'expense')) {
+    const k = t.mainCategory || '기타';
+    map[k] = (map[k] || 0) + Number(t.amount);
+  }
+  return Object.entries(map).sort((a, b) => b[1] - a[1]);
+}
+
+// ── 시간 경과율 ────────────────────────────
+function getTimeProgress(period, refDate = new Date()) {
+  if (period === 'yearly') {
+    const start = new Date(refDate.getFullYear(), 0, 1);
+    const end = new Date(refDate.getFullYear(), 11, 31);
+    return (refDate - start) / (end - start) * 100;
+  }
+  if (period === 'monthly') {
+    const days = getDaysInMonth(refDate.getFullYear(), refDate.getMonth());
+    return (refDate.getDate() - 1) / days * 100;
+  }
+  // weekly
+  const dow = refDate.getDay() || 7;
+  return (dow - 1) / 6 * 100;
+}
+
+// ── 테마 적용 ──────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  state.settings.theme = theme;
+}
+
+// ── 로딩 스피너 ────────────────────────────
+function showLoading(show) {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+// ── Toast 알림 ─────────────────────────────
+function toast(msg, type = 'success') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+// ── 숫자 포맷 입력 ─────────────────────────
+function formatNumberInput(input) {
+  const v = input.value.replace(/[^0-9]/g, '');
+  input.value = v ? Number(v).toLocaleString() : '';
+  input.dataset.raw = v;
+}
+
+// ── Gemini AI 호출 ─────────────────────────
+async function callGemini(prompt, imageBase64 = null) {
+  const apiKey = state.settings.geminiApiKey;
+  if (!apiKey) throw new Error('Gemini API Key가 설정되지 않았습니다.');
+  
+  // 사용자 지침에 따라 1.5 / 2 버전은 절대 사용하지 않음
+  // 첫 번째 시도: gemini-3.1-pro
+  let model = GEMINI_MODEL; 
+  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const parts = [{ text: prompt }];
+  if (imageBase64) {
+    parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] }),
+    });
+    
+    if (!res.ok) {
+       // 3.1-pro-preview 실패 시 3-flash-preview로 재시도
+       if (model === 'gemini-3.1-pro-preview') {
+         console.warn('⚠️ gemini-3.1-pro-preview 호출 실패, gemini-3-flash-preview로 재시도합니다.');
+         model = 'gemini-3-flash-preview';
+         url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+         const resRetry = await fetch(url, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ contents: [{ parts }] }),
+         });
+         if (!resRetry.ok) throw new Error(`Gemini API 오류 (${model}): ` + resRetry.statusText);
+         const dataRetry = await resRetry.json();
+         return dataRetry.candidates?.[0]?.content?.parts?.[0]?.text || '';
+       }
+       throw new Error(`Gemini API 오류 (${model}): ` + res.statusText);
+    }
+    
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (e) {
+    throw e;
+  }
+}
+
+// ── 영수증 OCR 파싱 ────────────────────────
+async function parseReceipt(imageBase64) {
+  const prompt = `이 영수증 이미지를 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트 없이 JSON만:
+{
+  "date": "YYYY-MM-DD",
+  "items": [
+    {
+      "name": "원래 품목명(영수증에 적힌 베트남어 등)",
+      "translatedName": "한국어 번역명(예: Bia -> 맥주)",
+      "count": 수량(숫자, 없으면 null),
+      "amount": 금액(숫자),
+      "mainCategory": "대분류",
+      "subCategory": "소분류"
+    }
+  ]
+}
+
+주의사항:
+1. "합계", "총액", "TOTAL", "Grand Total", "Total Amount", "Subtotal" 등 결제 총액이나 중간 합계는 **절대 포함하지 마세요**.
+2. "세금", "봉사료", "VAT", "Tax", "Service Charge" 등 부가 금액도 **절대 포함하지 마세요**.
+3. 오직 영수증에 적힌 **개별 상품(품목)의 이름과 금액**들만 리스트로 만들어주세요.
+4. 원래 품목명이 베트남어인 경우, 'translatedName' 필드에 한국어로 번역한 이름을 반드시 넣어주세요.
+5. 카테고리는 반드시 아래 목록 중에서 가장 적절한 것을 선택해줘:
+- 식비: [식사, 장보기, 음료/카페, 간식, 술]
+- 주거/생활: [아파트, 월세, 전기, 수도, 통신, 청소, 구독]
+- 사회생활/여가: [여가, 골프, 당구, 여행, 데이트, 선물, 헌금/기부, 팁(베트남), 수수료]
+- 자기개발/건강: [건강, 미용, 마사지, 반려동물, 담배, 로또]
+- 기타: [교통, 쇼핑, 대출, 신용카드, 임대료(달러), 데이터수정, 기타]
+- 한국: [가족용돈, 전화비, 월세, 관리비, 보험료, 경조사비, 기타]`;
+  const text = await callGemini(prompt, imageBase64);
+  try {
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}
+
+// ── 아이콘 img 태그 생성 ────────────────────
+function iconImg(key, size = 32, cls = '') {
+  const src = ICONS[key] || ICONS.etc;
+  return `<img src="${src}" width="${size}" height="${size}" class="icon-img ${cls}" alt="${key}" onerror="this.style.display='none'">`;
+}
+
+// ── 계좌 찾기 ──────────────────────────────
+function findAccount(id) { return state.accounts.find(a => a.$id === id); }
+function getCurrencySymbol(code) {
+  return CURRENCIES.find(c => c.code === code)?.symbol || code;
+}
+
+
+// =============================================
+// 📦 MERGED FROM: db.js
+// =============================================
 
 
 // =============================================
@@ -750,28 +792,11 @@ class AppwriteDB {
 }
 
 const db = new AppwriteDB();
-// =============================================
-// 민성이의 가계부 - 전역 상태 로컬 보관소
-// =============================================
 
-const store = {
-  currentTxType: 'expense',
-  selectedTxAccountId: null,
-  selectedTxIcon: null,
-  selectedTransferFrom: null,
-  selectedTransferTo: null,
-  selectedCurrencyIcon: null,
-  selectedBankIcon: null,
-  editingTxId: null,
-  statsPeriod: 'monthly',
-  statsType: 'expense',
-  reportPeriod: 'monthly',
-  donutChart: null,
-  usageChart: null,
-  progressChart: null,
-  assetChart: null,
-  balanceTrendChart: null,
-};
+
+// =============================================
+// 📦 MERGED FROM: ui.js
+// =============================================
 
 
 
@@ -1057,6 +1082,147 @@ window.closeModal = closeModal;
 window.closeModalOnBg = closeModalOnBg;
 
 
+// =============================================
+// 📦 MERGED FROM: budget.js
+// =============================================
+
+
+
+
+
+// =============================================
+// 민성이의 가계부 - 예산 설정 (소분류 지원)
+// =============================================
+
+function openBudgetModal() {
+  document.getElementById('budgetMonth').value = state.currentMonth;
+  renderBudgetInputList();
+  openModal('budgetModal');
+}
+
+function renderBudgetInputList() {
+  const el = document.getElementById('budgetInputList');
+  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
+  const ym = (rawYm || '').replace(/\./g, '-'); // 🚀 날짜 포맷 강제 표준화
+  const existing = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
+  const defaultCur = state.accounts[0]?.currency || 'VND';
+  const sym = getCurrencySymbol(defaultCur);
+
+  let html = '';
+  for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
+    // 소분류 합계 계산
+    const subs = existing.filter(e => e.category === mainCat && e.subCategory);
+    const subTotal = subs.reduce((s, b) => s + Number(b.amount), 0);
+    
+    // 대분류 예산 (직접 입력한 값이 있으면 우선, 없으면 소분류 합계 프리뷰)
+    const mainRecord = existing.find(e => e.category === mainCat && !e.subCategory);
+    const mainVal = mainRecord ? Number(mainRecord.amount).toLocaleString() : subTotal > 0 ? subTotal.toLocaleString() : '';
+
+    html += `<div class="budget-main-group" data-category="${mainCat}" style="margin-bottom:12px; border:1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden;">`;
+    html += `  <div style="background:var(--bg3); padding:8px 12px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
+                 <span style="font-size:14px;">${mainCat} <small style="font-weight:normal; color:var(--text2); font-size:11px;">(계산된 합계)</small></span> 
+                 <div class="amount-input-wrap" style="width: 130px;">
+                    <span class="amount-symbol" style="font-size:11px;">${sym}</span>
+                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" placeholder="직접 입력 시 우선" oninput="window.formatNumberInput(this)" style="padding-left:24px; height:28px; font-size:13px; text-align:right;">
+                 </div>
+               </div>`;
+    html += `  <div style="padding:8px 12px; background:var(--card); display:flex; flex-direction:column; gap:6px;">`;
+
+    for (const sub of subCats) {
+      const b = existing.find(e => e.category === mainCat && e.subCategory === sub.name);
+      const val = b ? Number(b.amount).toLocaleString() : '';
+      html += `    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+                     <label class="form-label" style="margin-bottom:0; width:80px; font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">↳ ${sub.name}</label>
+                     <div class="amount-input-wrap" style="flex:1;">
+                       <span class="amount-symbol" style="font-size:11px;">${sym}</span>
+                       <input type="text" inputmode="numeric" class="form-input sub-budget-input" 
+                         id="budget-${mainCat}-sub-${sub.id}" value="${val}" placeholder="0" 
+                         data-main="${mainCat}" 
+                         oninput="window.formatNumberInput(this); window.updateCategoryTotal('${mainCat}')" 
+                         style="padding-left:24px; height:30px; font-size:13px; text-align:right;">
+                     </div>
+                   </div>`;
+    }
+    html += `  </div>`;
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+// 소분류 입력 시 실시간으로 대분류 합계 칸 업데이트
+function updateCategoryTotal(mainCat) {
+  const group = document.querySelector(`.budget-main-group[data-category="${mainCat}"]`);
+  if (!group) return;
+  const subInputs = group.querySelectorAll('.sub-budget-input');
+  let total = 0;
+  subInputs.forEach(inp => {
+    const v = (inp.dataset.raw || inp.value).replace(/,/g, '');
+    if (v) total += Number(v);
+  });
+  const mainInp = document.getElementById(`budget-${mainCat}-main`);
+  if (mainInp) {
+    mainInp.value = total > 0 ? total.toLocaleString() : '';
+    mainInp.dataset.raw = total;
+  }
+}
+
+async function saveBudgets() {
+  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
+  const ym = (rawYm || '').replace(/\./g, '-');
+  
+  showLoading(true, '예산 저장 중...');
+  try {
+    // 🚀 전체 목록을 먼저 딱 한 번만 가져옴
+    const existingList = await db.getBudgets();
+    
+    for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
+      // 대분류 전체 예산 저장
+      const mainInp = document.getElementById(`budget-${mainCat}-main`);
+      if (mainInp) {
+        const raw = (mainInp.dataset.raw || mainInp.value || '0').replace(/,/g, '');
+        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: null }, existingList);
+        updateLocalBudgetStore(saved);
+      }
+
+      // 소분류 개별 예산 저장
+      for (const sub of subCats) {
+        const inp = document.getElementById(`budget-${mainCat}-sub-${sub.id}`);
+        if (!inp) continue;
+        const raw = (inp.dataset.raw || inp.value || '0').replace(/,/g, '');
+        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: sub.name }, existingList);
+        updateLocalBudgetStore(saved);
+      }
+    }
+    
+    toast('✅ 모든 예산이 안전하게 저장됐어요!');
+    if(window.closeModal) window.closeModal('budgetModal');
+    if(typeof window.renderStats === 'function') window.renderStats();
+  } catch(e) { 
+    console.error('예산 저장 최종 실패:', e);
+    toast('❌ 저장 실패: ' + (e.message || '알 수 없는 오류'), 'error'); 
+    alert('⚠️ 예산 저장 중 오류가 발생했습니다.\n\n사유: ' + (e.message || '서버 연결 불안정 또는 권한 문제') + '\n\n페이지를 새로고침한 후 다시 시도해 주세요.');
+  }
+  showLoading(false);
+}
+
+function updateLocalBudgetStore(saved) {
+  const idx = state.budgets.findIndex(b => b.category === saved.category && b.yearMonth === saved.yearMonth && b.subCategory === saved.subCategory);
+  if (idx >= 0) state.budgets[idx] = saved;
+  else state.budgets.push(saved);
+}
+
+// 전역 함수 자가 등록
+window.openBudgetModal = openBudgetModal;
+window.saveBudgets = saveBudgets;
+window.updateCategoryTotal = updateCategoryTotal;
+window.renderBudgetInputList = renderBudgetInputList;
+
+
+// =============================================
+// 📦 MERGED FROM: transactions.js
+// =============================================
+
+
 
 
 
@@ -1081,6 +1247,7 @@ function renderTxItem(t) {
   const cur = acc?.currency || 'VND';
   const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
   const cls = t.type;
+
   let txDisplayName = t.memo || t.subCategory || t.mainCategory;
   if (!txDisplayName) {
     if (t.type === 'transfer') {
@@ -1419,6 +1586,11 @@ window.doSearch = doSearch;
 window.renderTxItem = renderTxItem;
 
 
+// =============================================
+// 📦 MERGED FROM: stats.js
+// =============================================
+
+
 
 
 
@@ -1443,6 +1615,10 @@ function setStatsType(t, btn) {
 
 function getStatsTxs() {
   const now = new Date();
+  if (store.statsPeriod === 'yearly') {
+    const year = state.currentMonth.split('-')[0];
+    return state.transactions.filter(t => (t.date || '').startsWith(year) && t.type === store.statsType);
+  }
   if (store.statsPeriod === 'monthly') {
     const month = state.currentMonth; // YYYY-MM
     return state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month.replace(/\./g, '-')) && t.type === store.statsType);
@@ -1450,7 +1626,10 @@ function getStatsTxs() {
   // 주간 (현재 주)
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - (now.getDay() || 7) + 1);
-  const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
+  startOfWeek.setHours(0,0,0,0);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23,59,59,999);
   return state.transactions.filter(t => {
     const d = new Date(t.date);
     return d >= startOfWeek && d <= endOfWeek && t.type === store.statsType;
@@ -1703,7 +1882,7 @@ async function renderAnalysisCharts() {
   const totalUsed = topLevelStatus.reduce((s, b) => s + Number(b.used || 0), 0);
   const usagePct = totalBudget > 0 ? (totalUsed / totalBudget * 100) : 0;
 
-  console.log(`📊 [Monolith-Report:${store.reportPeriod}] Budget:${totalBudget}, Used:${totalUsed}, UsageRate:${usagePct.toFixed(1)}%, TimeProgress:${timeProgress.toFixed(1)}%`);
+  console.log(`📊 [Report:${store.reportPeriod}] Budget:${totalBudget}, Used:${totalUsed}, UsageRate:${usagePct.toFixed(1)}%, TimeProgress:${timeProgress.toFixed(1)}%`);
 
   if (store.usageChart) store.usageChart.destroy();
   const ctx1 = document.getElementById('usageChart').getContext('2d');
@@ -1966,136 +2145,9 @@ window.setReportPeriod = setReportPeriod;
 window.renderCalendarScreen = renderCalendarScreen;
 
 
-
-
-
-
 // =============================================
-// 민성이의 가계부 - 예산 설정 (소분류 지원)
+// 📦 MERGED FROM: sync.js
 // =============================================
-
-function openBudgetModal() {
-  document.getElementById('budgetMonth').value = state.currentMonth;
-  renderBudgetInputList();
-  openModal('budgetModal');
-}
-
-function renderBudgetInputList() {
-  const el = document.getElementById('budgetInputList');
-  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
-  const ym = (rawYm || '').replace(/\./g, '-'); // 🚀 날짜 포맷 강제 표준화
-  const existing = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
-  const defaultCur = state.accounts[0]?.currency || 'VND';
-  const sym = getCurrencySymbol(defaultCur);
-
-  let html = '';
-  for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
-    // 소분류 합계 계산
-    const subs = existing.filter(e => e.category === mainCat && e.subCategory);
-    const subTotal = subs.reduce((s, b) => s + Number(b.amount), 0);
-    
-    // 대분류 예산 (직접 입력한 값이 있으면 우선, 없으면 소분류 합계 프리뷰)
-    const mainRecord = existing.find(e => e.category === mainCat && !e.subCategory);
-    const mainVal = mainRecord ? Number(mainRecord.amount).toLocaleString() : subTotal > 0 ? subTotal.toLocaleString() : '';
-
-    html += `<div class="budget-main-group" data-category="${mainCat}" style="margin-bottom:12px; border:1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden;">`;
-    html += `  <div style="background:var(--bg3); padding:8px 12px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
-                 <span style="font-size:14px;">${mainCat} <small style="font-weight:normal; color:var(--text2); font-size:11px;">(계산된 합계)</small></span> 
-                 <div class="amount-input-wrap" style="width: 130px;">
-                    <span class="amount-symbol" style="font-size:11px;">${sym}</span>
-                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" placeholder="직접 입력 시 우선" oninput="window.formatNumberInput(this)" style="padding-left:24px; height:28px; font-size:13px; text-align:right;">
-                 </div>
-               </div>`;
-    html += `  <div style="padding:8px 12px; background:var(--card); display:flex; flex-direction:column; gap:6px;">`;
-
-    for (const sub of subCats) {
-      const b = existing.find(e => e.category === mainCat && e.subCategory === sub.name);
-      const val = b ? Number(b.amount).toLocaleString() : '';
-      html += `    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
-                     <label class="form-label" style="margin-bottom:0; width:80px; font-size:12px; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">↳ ${sub.name}</label>
-                     <div class="amount-input-wrap" style="flex:1;">
-                       <span class="amount-symbol" style="font-size:11px;">${sym}</span>
-                       <input type="text" inputmode="numeric" class="form-input sub-budget-input" 
-                         id="budget-${mainCat}-sub-${sub.id}" value="${val}" placeholder="0" 
-                         data-main="${mainCat}" 
-                         oninput="window.formatNumberInput(this); window.updateCategoryTotal('${mainCat}')" 
-                         style="padding-left:24px; height:30px; font-size:13px; text-align:right;">
-                     </div>
-                   </div>`;
-    }
-    html += `  </div>`;
-    html += `</div>`;
-  }
-  el.innerHTML = html;
-}
-
-// 소분류 입력 시 실시간으로 대분류 합계 칸 업데이트
-function updateCategoryTotal(mainCat) {
-  const group = document.querySelector(`.budget-main-group[data-category="${mainCat}"]`);
-  if (!group) return;
-  const subInputs = group.querySelectorAll('.sub-budget-input');
-  let total = 0;
-  subInputs.forEach(inp => {
-    const v = (inp.dataset.raw || inp.value).replace(/,/g, '');
-    if (v) total += Number(v);
-  });
-  const mainInp = document.getElementById(`budget-${mainCat}-main`);
-  if (mainInp) {
-    mainInp.value = total > 0 ? total.toLocaleString() : '';
-    mainInp.dataset.raw = total;
-  }
-}
-
-async function saveBudgets() {
-  const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
-  const ym = (rawYm || '').replace(/\./g, '-');
-  
-  showLoading(true, '예산 저장 중...');
-  try {
-    // 🚀 전체 목록을 먼저 딱 한 번만 가져옴
-    const existingList = await db.getBudgets();
-    
-    for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
-      // 대분류 전체 예산 저장
-      const mainInp = document.getElementById(`budget-${mainCat}-main`);
-      if (mainInp) {
-        const raw = (mainInp.dataset.raw || mainInp.value || '0').replace(/,/g, '');
-        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: null }, existingList);
-        updateLocalBudgetStore(saved);
-      }
-
-      // 소분류 개별 예산 저장
-      for (const sub of subCats) {
-        const inp = document.getElementById(`budget-${mainCat}-sub-${sub.id}`);
-        if (!inp) continue;
-        const raw = (inp.dataset.raw || inp.value || '0').replace(/,/g, '');
-        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: sub.name }, existingList);
-        updateLocalBudgetStore(saved);
-      }
-    }
-    
-    toast('✅ 모든 예산이 안전하게 저장됐어요!');
-    if(window.closeModal) window.closeModal('budgetModal');
-    if(typeof window.renderStats === 'function') window.renderStats();
-  } catch(e) { 
-    console.error('예산 저장 최종 실패:', e);
-    toast('❌ 저장 실패: ' + (e.message || '알 수 없는 오류'), 'error'); 
-    alert('⚠️ 예산 저장 중 오류가 발생했습니다.\n\n사유: ' + (e.message || '서버 연결 불안정 또는 권한 문제') + '\n\n페이지를 새로고침한 후 다시 시도해 주세요.');
-  }
-  showLoading(false);
-}
-
-function updateLocalBudgetStore(saved) {
-  const idx = state.budgets.findIndex(b => b.category === saved.category && b.yearMonth === saved.yearMonth && b.subCategory === saved.subCategory);
-  if (idx >= 0) state.budgets[idx] = saved;
-  else state.budgets.push(saved);
-}
-
-// 전역 함수 자가 등록
-window.openBudgetModal = openBudgetModal;
-window.saveBudgets = saveBudgets;
-window.updateCategoryTotal = updateCategoryTotal;
-window.renderBudgetInputList = renderBudgetInputList;
 
 
 // =============================================
@@ -2209,6 +2261,11 @@ async function getBalanceAtDate(toDateStr, baseCur = 'VND') {
 }
 
 
+// =============================================
+// 📦 MERGED FROM: main.js
+// =============================================
+
+
 
 
 // =============================================
@@ -2226,8 +2283,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    // 버전을 localStorage에 기록 (리다이렉트 없음)
-    localStorage.setItem('app-ver', '1.406');
+    localStorage.setItem('app-ver', '1.407');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
