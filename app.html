@@ -15,7 +15,7 @@
 <script>
   // 🚀 Emergency Recovery Script (v1.057)
   (function() {
-    const CURRENT_VER = '1.407';
+    const CURRENT_VER = '1.408';
     const isRepair = window.location.search.includes('v=repair');
     const storedVer = localStorage.getItem('app-ver');
 
@@ -299,7 +299,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.407</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.408</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -539,6 +539,28 @@
   </div>
 </div>
 
+<!-- ══ 모달: 계좌 사용 내역 ══════════════════════════ -->
+<div class="modal-overlay" id="accountHistoryModal" onclick="closeModalOnBg(event,'accountHistoryModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <h2 id="accountHistoryTitle">계좌 내역</h2>
+        <div id="accountHistorySub" style="font-size:11px; color:var(--text3); font-weight:500;"></div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn-secondary btn-sm" id="btnEditAccountInHistory" style="padding:4px 8px; font-size:11px;">✏️ 수정</button>
+        <button class="modal-close" onclick="closeModal('accountHistoryModal')">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:10px 0;">
+      <div id="accountHistoryList" class="tx-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 모달: 거래 상세 ══════════════════════════ -->
 <div class="modal-overlay" id="txDetailModal" onclick="closeModalOnBg(event,'txDetailModal')">
   <div class="modal">
@@ -555,6 +577,6 @@
 
 <!-- Appwrite Web SDK -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
-<script src="js/app.js?v=1.407"></script>
+<script src="js/app.js?v=1.408"></script>
 </body>
 </html>

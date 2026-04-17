@@ -17,7 +17,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    localStorage.setItem('app-ver', '1.407');
+    localStorage.setItem('app-ver', '1.408');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
@@ -126,7 +126,7 @@ async function renderAccountsList() {
     const cur = a.currency || 'VND';
     const iconKey = a.bankIcon || a.currencyIcon || cur.toLowerCase();
     
-    return `<div class="account-card" onclick="window.openAccountModal('${a.$id}')">
+    return `<div class="account-card" onclick="window.openAccountHistory('${a.$id}')">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <img src="${ICONS[iconKey]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">
         <span class="name">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>

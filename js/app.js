@@ -175,7 +175,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.407';
+const APP_VERSION = '1.408';
 
 
 // =============================================
@@ -1584,6 +1584,55 @@ window.showTxDetail = showTxDetail;
 window.deleteTx = deleteTx;
 window.doSearch = doSearch;
 window.renderTxItem = renderTxItem;
+window.openAccountHistory = openAccountHistory;
+window.renderAccountHistory = renderAccountHistory;
+
+// ─────────────────────────────────────────────
+// 계좌 상세 내역 조회
+// ─────────────────────────────────────────────
+function openAccountHistory(accountId) {
+  const acc = findAccount(accountId);
+  if (!acc) return;
+
+  const titleEl = document.getElementById('accountHistoryTitle');
+  const subEl = document.getElementById('accountHistorySub');
+  const btnEdit = document.getElementById('btnEditAccountInHistory');
+
+  if (titleEl) titleEl.textContent = `${acc.name} 내역`;
+  if (subEl) {
+    const bal = calcBalance(accountId) + (Number(acc.initialBalance) || 0);
+    subEl.textContent = `현재 잔액: ${fmtMoney(bal, acc.currency || 'VND').replace(/<[^>]*>/g, '')}`;
+  }
+  
+  if (btnEdit) {
+    btnEdit.onclick = () => {
+      closeModal('accountHistoryModal');
+      if (window.openAccountModal) window.openAccountModal(accountId);
+    };
+  }
+
+  renderAccountHistory(accountId);
+  openModal('accountHistoryModal');
+}
+
+function renderAccountHistory(accountId) {
+  const el = document.getElementById('accountHistoryList');
+  if (!el) return;
+
+  // 해당 계좌와 관련된 모든 거래 필터링 (계좌ID, 출금계좌ID, 입금계좌ID 중 하나라도 일치)
+  const results = state.transactions.filter(t => 
+    t.accountId === accountId || 
+    t.fromAccountId === accountId || 
+    t.toAccountId === accountId
+  ).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (!results.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px;"><p>거래 내역이 없습니다</p></div>';
+    return;
+  }
+
+  el.innerHTML = results.map(t => renderTxItem(t)).join('');
+}
 
 
 // =============================================
@@ -2283,7 +2332,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    localStorage.setItem('app-ver', '1.407');
+    localStorage.setItem('app-ver', '1.408');
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
@@ -2392,7 +2441,7 @@ async function renderAccountsList() {
     const cur = a.currency || 'VND';
     const iconKey = a.bankIcon || a.currencyIcon || cur.toLowerCase();
     
-    return `<div class="account-card" onclick="window.openAccountModal('${a.$id}')">
+    return `<div class="account-card" onclick="window.openAccountHistory('${a.$id}')">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <img src="${ICONS[iconKey]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">
         <span class="name">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>

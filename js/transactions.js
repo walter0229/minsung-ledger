@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading } from './utils.js';
+import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading, calcBalance } from './utils.js';
 import { store } from './store.js';
 import { CATEGORIES, ICONS, MAIN_CAT_ICONS } from './config.js';
 import { openModal, closeModal } from './ui.js';
@@ -361,3 +361,52 @@ window.showTxDetail = showTxDetail;
 window.deleteTx = deleteTx;
 window.doSearch = doSearch;
 window.renderTxItem = renderTxItem;
+window.openAccountHistory = openAccountHistory;
+window.renderAccountHistory = renderAccountHistory;
+
+// ─────────────────────────────────────────────
+// 계좌 상세 내역 조회
+// ─────────────────────────────────────────────
+export function openAccountHistory(accountId) {
+  const acc = findAccount(accountId);
+  if (!acc) return;
+
+  const titleEl = document.getElementById('accountHistoryTitle');
+  const subEl = document.getElementById('accountHistorySub');
+  const btnEdit = document.getElementById('btnEditAccountInHistory');
+
+  if (titleEl) titleEl.textContent = `${acc.name} 내역`;
+  if (subEl) {
+    const bal = calcBalance(accountId) + (Number(acc.initialBalance) || 0);
+    subEl.textContent = `현재 잔액: ${fmtMoney(bal, acc.currency || 'VND').replace(/<[^>]*>/g, '')}`;
+  }
+  
+  if (btnEdit) {
+    btnEdit.onclick = () => {
+      closeModal('accountHistoryModal');
+      if (window.openAccountModal) window.openAccountModal(accountId);
+    };
+  }
+
+  renderAccountHistory(accountId);
+  openModal('accountHistoryModal');
+}
+
+export function renderAccountHistory(accountId) {
+  const el = document.getElementById('accountHistoryList');
+  if (!el) return;
+
+  // 해당 계좌와 관련된 모든 거래 필터링 (계좌ID, 출금계좌ID, 입금계좌ID 중 하나라도 일치)
+  const results = state.transactions.filter(t => 
+    t.accountId === accountId || 
+    t.fromAccountId === accountId || 
+    t.toAccountId === accountId
+  ).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (!results.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px;"><p>거래 내역이 없습니다</p></div>';
+    return;
+  }
+
+  el.innerHTML = results.map(t => renderTxItem(t)).join('');
+}
