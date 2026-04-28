@@ -175,7 +175,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.408';
+const APP_VERSION = '1.410';
 
 
 // =============================================
@@ -576,12 +576,13 @@ class AppwriteDB {
       }
       this.client = new window.Appwrite.Client();
       this.client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
+      console.log(`📡 DB 초기화: ${APPWRITE_ENDPOINT} (Project: ${APPWRITE_PROJECT_ID})`);
       this.account = new window.Appwrite.Account(this.client);
       this.databases = new window.Appwrite.Databases(this.client);
       this.online = true;
       this.ready = this.ensureSession();
     } catch (e) {
-      this.logError('DB 초기화 에러: ' + e.message);
+      this.logError('DB 초기화 치명적 에러: ' + e.message);
       this.online = false;
       this.ready = Promise.resolve();
     }
@@ -627,14 +628,15 @@ class AppwriteDB {
     
     try {
       await Promise.race([this.account.get(), timeout]);
-      console.log('✅ 세션 연결 성공');
+      console.log('✅ 기존 세션 연결 성공');
     } catch (e) {
-      this.logError('기존 세션 확인 실패: ' + e.message);
+      this.logError('기존 세션 확인 실패: ' + e.message + (e.code ? ` (Code: ${e.code})` : ''));
       try {
+        console.log('💡 익명 세션 생성 시도 중...');
         await Promise.race([this.account.createAnonymousSession(), timeout]);
         console.log('✅ 익명 세션 생성 성공');
       } catch (err) {
-        this.logError('익명 세션 생성 실패: ' + err.message);
+        this.logError('익명 세션 생성 최종 실패: ' + err.message + (err.code ? ` (Code: ${err.code})` : ''));
         this.online = false;
       }
     }
@@ -2332,7 +2334,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    localStorage.setItem('app-ver', '1.408');
+    localStorage.setItem('app-ver', APP_VERSION);
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
@@ -2469,12 +2471,28 @@ function renderTxList() {
     groups[d].push(t);
   });
 
-  el.innerHTML = Object.entries(groups).map(([date, list]) => `
+  el.innerHTML = Object.entries(groups).map(([date, list]) => {
+    let dailyExpense = 0;
+    list.forEach(t => {
+      if (t.type === 'expense') {
+        dailyExpense += (t.vndAmt || Number(t.amount) || 0);
+      }
+    });
+    
+    let expenseHtml = '';
+    if (dailyExpense > 0) {
+      expenseHtml = `<span style="font-size: 12px; color: var(--expense); font-weight: normal;">지출 ${fmtMoney(dailyExpense, 'VND')}</span>`;
+    }
+
+    return `
     <div class="tx-date-group">
-      <div class="tx-date-label">${fmtDate(date)}</div>
+      <div class="tx-date-label" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>${fmtDate(date)}</span>
+        ${expenseHtml}
+      </div>
       ${list.map(t => window.renderTxItem ? window.renderTxItem(t) : '').join('')}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function renderBudgetAlerts() {

@@ -1,6 +1,6 @@
 import { loadAll, state, fmtMoney, toast, showLoading, fmtDate, calcBalance, findAccount, convertCurrency, iconImg } from './utils.js';
 import { db } from './db.js';
-import { ICONS } from './config.js';
+import { ICONS, APP_VERSION } from './config.js';
 
 // =============================================
 // 민성이의 가계부 - v1.060 메인 컨트롤러 (구조 개선)
@@ -17,7 +17,7 @@ window.forceUpdateApp = forceUpdateApp;
 // 초기화 로직
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    localStorage.setItem('app-ver', '1.408');
+    localStorage.setItem('app-ver', APP_VERSION);
 
     // 초기화 루틴 실행 브릿지 활성화
     window.__prevMonth = prevMonth;
@@ -154,12 +154,28 @@ function renderTxList() {
     groups[d].push(t);
   });
 
-  el.innerHTML = Object.entries(groups).map(([date, list]) => `
+  el.innerHTML = Object.entries(groups).map(([date, list]) => {
+    let dailyExpense = 0;
+    list.forEach(t => {
+      if (t.type === 'expense') {
+        dailyExpense += (t.vndAmt || Number(t.amount) || 0);
+      }
+    });
+    
+    let expenseHtml = '';
+    if (dailyExpense > 0) {
+      expenseHtml = `<span style="font-size: 12px; color: var(--expense); font-weight: normal;">지출 ${fmtMoney(dailyExpense, 'VND')}</span>`;
+    }
+
+    return `
     <div class="tx-date-group">
-      <div class="tx-date-label">${fmtDate(date)}</div>
+      <div class="tx-date-label" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>${fmtDate(date)}</span>
+        ${expenseHtml}
+      </div>
       ${list.map(t => window.renderTxItem ? window.renderTxItem(t) : '').join('')}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function renderBudgetAlerts() {

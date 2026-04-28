@@ -16,12 +16,13 @@ class AppwriteDB {
       }
       this.client = new window.Appwrite.Client();
       this.client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
+      console.log(`📡 DB 초기화: ${APPWRITE_ENDPOINT} (Project: ${APPWRITE_PROJECT_ID})`);
       this.account = new window.Appwrite.Account(this.client);
       this.databases = new window.Appwrite.Databases(this.client);
       this.online = true;
       this.ready = this.ensureSession();
     } catch (e) {
-      this.logError('DB 초기화 에러: ' + e.message);
+      this.logError('DB 초기화 치명적 에러: ' + e.message);
       this.online = false;
       this.ready = Promise.resolve();
     }
@@ -67,14 +68,15 @@ class AppwriteDB {
     
     try {
       await Promise.race([this.account.get(), timeout]);
-      console.log('✅ 세션 연결 성공');
+      console.log('✅ 기존 세션 연결 성공');
     } catch (e) {
-      this.logError('기존 세션 확인 실패: ' + e.message);
+      this.logError('기존 세션 확인 실패: ' + e.message + (e.code ? ` (Code: ${e.code})` : ''));
       try {
+        console.log('💡 익명 세션 생성 시도 중...');
         await Promise.race([this.account.createAnonymousSession(), timeout]);
         console.log('✅ 익명 세션 생성 성공');
       } catch (err) {
-        this.logError('익명 세션 생성 실패: ' + err.message);
+        this.logError('익명 세션 생성 최종 실패: ' + err.message + (err.code ? ` (Code: ${err.code})` : ''));
         this.online = false;
       }
     }
