@@ -8,6 +8,7 @@ const srcFiles = [
   'db.js',
   'ui.js',
   'budget.js',
+  'accounts.js',
   'transactions.js',
   'stats.js',
   'sync.js',
