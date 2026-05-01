@@ -15,7 +15,7 @@
 <script>
   // 🚀 Emergency Recovery Script (v1.057)
   (function() {
-    const CURRENT_VER = '1.412';
+    const CURRENT_VER = '1.413';
     const isRepair = window.location.search.includes('v=repair');
     const storedVer = localStorage.getItem('app-ver');
 
@@ -299,7 +299,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.412</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.413</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -531,7 +531,7 @@
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label">적용 월</label>
-        <input type="month" class="form-input" id="budgetMonth">
+        <input type="month" class="form-input" id="budgetMonth" onchange="renderBudgetInputList()">
       </div>
       <div id="budgetInputList"></div>
       <button class="btn-primary" onclick="saveBudgets()" style="margin-top:8px;">저장</button>
@@ -577,6 +577,6 @@
 
 <!-- Appwrite Web SDK -->
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
-<script src="js/app.js?v=1.412"></script>
+<script src="js/app.js?v=1.413"></script>
 </body>
 </html>

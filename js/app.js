@@ -175,7 +175,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.412';
+const APP_VERSION = '1.413';
 
 
 // =============================================
