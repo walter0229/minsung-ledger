@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <title>가계부 업데이트 중...</title>
     <script>
-        // v1.411: 파일(file://) 모드 호환성 강화 및 강제 리다이렉트
+        // v1.412: 파일(file://) 모드 호환성 강화 및 강제 리다이렉트
         (async function() {
             console.log("🚀 가계부 진입 시도...");
             
             // 안전 장치: 3초 뒤에도 안 넘어가면 강제 이동
             const forceRedirect = setTimeout(() => {
-                window.location.href = "app.html?v=1.411";
+                window.location.href = "app.html?v=1.412";
             }, 3000);
 
             try {
@@ -41,14 +41,14 @@
                 if(accounts) localStorage.setItem('ledger_accounts', accounts);
                 if(budgets) localStorage.setItem('ledger_budgets', budgets);
 
-                localStorage.setItem('app-ver', '1.411');
+                localStorage.setItem('app-ver', '1.412');
             } catch (e) {
                 console.warn("초기화 과정 중 오류 발생(무시됨):", e.message);
             }
 
             // 4. 새로운 진입점으로 강제 이동
             clearTimeout(forceRedirect);
-            window.location.href = "app.html?v=1.411&t=" + Date.now();
+            window.location.href = "app.html?v=1.412&t=" + Date.now();
         })();
     </script>
 </head>

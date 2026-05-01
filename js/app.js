@@ -175,7 +175,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.411';
+const APP_VERSION = '1.412';
 
 
 // =============================================
@@ -2651,16 +2651,18 @@ function renderBudgetAlerts() {
 }
 
 function prevMonth() {
-  const [y, m] = state.currentMonth.split('-').map(Number);
-  const d = new Date(y, m - 2, 1);
-  state.currentMonth = d.toISOString().slice(0, 7);
+  let [y, m] = state.currentMonth.split('-').map(Number);
+  m -= 1;
+  if (m < 1) { m = 12; y -= 1; }
+  state.currentMonth = `${y}-${String(m).padStart(2, '0')}`;
   renderHome();
 }
 
 function nextMonth() {
-  const [y, m] = state.currentMonth.split('-').map(Number);
-  const d = new Date(y, m, 1);
-  state.currentMonth = d.toISOString().slice(0, 7);
+  let [y, m] = state.currentMonth.split('-').map(Number);
+  m += 1;
+  if (m > 12) { m = 1; y += 1; }
+  state.currentMonth = `${y}-${String(m).padStart(2, '0')}`;
   renderHome();
 }
 
