@@ -101,11 +101,13 @@ export const CATEGORIES = {
   ],
   '주거/생활': [
     { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
+    { id: 'apartment', name: '관리비', icon: 'apartment' },
     { id: 'electricity', name: '전기', icon: 'electricity' },
     { id: 'water', name: '수도', icon: 'water' },
     { id: 'phone', name: '통신', icon: 'phone' },
     { id: 'cleaning', name: '청소', icon: 'cleaning' },
     { id: 'subscription', name: '구독', icon: 'subscription' },
+    { id: 'daily_necessity', name: '생필품', icon: 'shopping' },
   ],
   '사회생활/여가': [
     { id: 'golf', name: '골프', icon: 'golf' },
@@ -169,4 +171,4 @@ export const ACCOUNT_TYPES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.413';
+export const APP_VERSION = '1.414';

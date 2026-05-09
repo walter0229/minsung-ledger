@@ -107,11 +107,13 @@ const CATEGORIES = {
   ],
   '주거/생활': [
     { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
+    { id: 'apartment', name: '관리비', icon: 'apartment' },
     { id: 'electricity', name: '전기', icon: 'electricity' },
     { id: 'water', name: '수도', icon: 'water' },
     { id: 'phone', name: '통신', icon: 'phone' },
     { id: 'cleaning', name: '청소', icon: 'cleaning' },
     { id: 'subscription', name: '구독', icon: 'subscription' },
+    { id: 'daily_necessity', name: '생필품', icon: 'shopping' },
   ],
   '사회생활/여가': [
     { id: 'golf', name: '골프', icon: 'golf' },
@@ -175,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.413';
+const APP_VERSION = '1.414';
 
 
 // =============================================
@@ -528,7 +530,7 @@ async function parseReceipt(imageBase64) {
 4. 원래 품목명이 베트남어인 경우, 'translatedName' 필드에 한국어로 번역한 이름을 반드시 넣어주세요.
 5. 카테고리는 반드시 아래 목록 중에서 가장 적절한 것을 선택해줘:
 - 식비: [식사, 장보기, 음료/카페, 간식, 술]
-- 주거/생활: [아파트, 월세, 전기, 수도, 통신, 청소, 구독]
+- 주거/생활: [아파트, 월세, 관리비, 전기, 수도, 통신, 청소, 구독, 생필품]
 - 사회생활/여가: [여가, 골프, 당구, 여행, 데이트, 선물, 헌금/기부, 팁(베트남), 수수료]
 - 자기개발/건강: [건강, 미용, 마사지, 반려동물, 담배, 로또]
 - 기타: [교통, 쇼핑, 대출, 신용카드, 임대료(달러), 데이터수정, 기타]
