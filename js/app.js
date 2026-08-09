@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.419';
+const APP_VERSION = '1.420';
 
 
 // =============================================
@@ -1433,7 +1433,7 @@ function renderTxItem(t, context = 'home') {
     }
   }
 
-  const isReorder = window.txReorderMode && window.txReorderContext === context;
+  const isReorder = window.txReorderMode === true;
   let upDownBtns = '';
   
   if (isReorder) {
@@ -1441,13 +1441,13 @@ function renderTxItem(t, context = 'home') {
       <div style="display:flex; align-items:center; gap:6px; padding-left:8px; pointer-events:auto;">
         <div class="drag-handle-btn" 
              onpointerdown="window.txPointerDown(event, '${t.$id}', '${context}')" 
-             style="cursor:grab; padding:4px 8px; font-size:12px; color:#fff; background:linear-gradient(135deg,#7c6af7,#6366f1); border-radius:6px; user-select:none; touch-action:none; display:flex; align-items:center; gap:4px; font-weight:600; box-shadow:0 2px 6px rgba(124,106,247,0.4);" 
+             style="cursor:grab; padding:6px 10px; font-size:12px; color:#fff; background:linear-gradient(135deg,#7c6af7,#6366f1); border-radius:6px; user-select:none; touch-action:none; display:flex; align-items:center; gap:4px; font-weight:700; box-shadow:0 2px 8px rgba(124,106,247,0.5);" 
              title="이곳을 누르고 위아래로 드래그하세요">
-          <span>☰</span> <span>이동</span>
+          <span style="font-size:15px;">☰</span> <span>이동</span>
         </div>
         <div style="display:flex; flex-direction:column; justify-content:center;">
-          <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:13px; color:var(--text2); cursor:pointer;">▲</button>
-          <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:13px; color:var(--text2); cursor:pointer;">▼</button>
+          <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px 4px; font-size:13px; color:var(--text2); cursor:pointer;">▲</button>
+          <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px 4px; font-size:13px; color:var(--text2); cursor:pointer;">▼</button>
         </div>
       </div>
     `;
