@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.414';
+const APP_VERSION = '1.415';
 
 
 // =============================================
@@ -273,48 +273,68 @@ function getWeekNumber(d) {
 
 // ── 데이터 로딩 ────────────────────────────
 async function loadAll() {
-  showLoading(true);
+  // 🚀 1. 로컬 저장소(localStorage) 데이터 0.01초 즉시 로드 (먹통 방지)
   try {
-    await db.ready; // DB 초기화 완료까지 대기
-    const [txs, accs, buds] = await Promise.all([
-      db.listTransactions(),
-      db.listAccounts(),
-      db.listBudgets(),
-    ]);
-    // 데이터 중복 제거 (ID 기준)
-    const unique = (arr) => {
-      const seen = new Set();
-      return arr.filter(item => {
-        if (!item.$id) return true; // ID 없는 경우(드문 경우) 유지
-        if (seen.has(item.$id)) return false;
-        seen.add(item.$id);
-        return true;
-      });
-    };
+    const localTxs = db.local.get(COL.TRANSACTIONS);
+    const localAccs = db.local.get(COL.ACCOUNTS);
+    const localBuds = db.local.get(COL.BUDGETS);
+    const localSets = JSON.parse(localStorage.getItem('ledger_app-settings') || '{}');
 
-    state.accounts = unique(accs);
-    state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
-    
-    // 예산 데이터 중복 제거 (ID가 다르더라도 내용 - 년월, 대분류, 소분류 - 이 같으면 중복으로 간주)
-    const budgetMap = {};
-    unique(buds).forEach(b => {
-      const ym = (b.yearMonth||'').replace(/\./g,'-');
-      const cat = b.category || '기타';
-      const sub = b.subCategory || '';
-      const key = `${ym}_${cat}_${sub}`;
-      // 이미 같은 키의 예산이 있다면, 나중 것(Appwrite 특성상 더 최신일 가능성)으로 덮어씀
-      budgetMap[key] = b;
-    });
-    state.budgets = Object.values(budgetMap);
-
-    
-    const s = await db.getSettings();
-    if (s) Object.assign(state.settings, s);
-    applyTheme(state.settings.theme || 'dark');
-  } catch(e) {
-    console.error('데이터 로딩 오류:', e);
+    if (localAccs.length > 0 || localTxs.length > 0) {
+      state.accounts = localAccs;
+      state.transactions = localTxs.sort((a,b) => new Date(b.date) - new Date(a.date));
+      state.budgets = localBuds;
+      if (localSets) Object.assign(state.settings, localSets);
+    }
+  } catch (e) {
+    console.warn('로컬 로드 경고:', e);
   }
+
   showLoading(false);
+
+  // 🚀 2. 클라우드 DB 접속 및 배경 비동기 동기화 (화면을 멈추지 않음)
+  (async () => {
+    try {
+      const [txs, accs, buds] = await Promise.all([
+        db.listTransactions(),
+        db.listAccounts(),
+        db.listBudgets(),
+      ]);
+
+      const unique = (arr) => {
+        const seen = new Set();
+        return arr.filter(item => {
+          if (!item.$id) return true;
+          if (seen.has(item.$id)) return false;
+          seen.add(item.$id);
+          return true;
+        });
+      };
+
+      if (accs && accs.length > 0) state.accounts = unique(accs);
+      if (txs && txs.length > 0) state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
+      
+      if (buds && buds.length > 0) {
+        const budgetMap = {};
+        unique(buds).forEach(b => {
+          const ym = (b.yearMonth||'').replace(/\./g,'-');
+          const cat = b.category || '기타';
+          const sub = b.subCategory || '';
+          const key = `${ym}_${cat}_${sub}`;
+          budgetMap[key] = b;
+        });
+        state.budgets = Object.values(budgetMap);
+      }
+
+      const s = await db.getSettings();
+      if (s) Object.assign(state.settings, s);
+      applyTheme(state.settings.theme || 'dark');
+      
+      if (window.renderHome) window.renderHome();
+    } catch(err) {
+      console.log('클라우드 DB 동기화 대기/오프라인 상태:', err.message);
+    }
+  })();
 }
 
 // ── 계좌 잔액 계산 ─────────────────────────
@@ -463,47 +483,66 @@ function formatNumberInput(input) {
 // ── Gemini AI 호출 ─────────────────────────
 async function callGemini(prompt, imageBase64 = null) {
   const apiKey = state.settings.geminiApiKey;
-  if (!apiKey) throw new Error('Gemini API Key가 설정되지 않았습니다.');
-  
-  // 사용자 지침에 따라 1.5 / 2 버전은 절대 사용하지 않음
-  // 첫 번째 시도: gemini-3.1-pro
-  let model = GEMINI_MODEL; 
-  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  if (!apiKey) throw new Error('Gemini API Key가 설정되지 않았습니다. 설정 페이지에서 API Key를 등록하고 저장해주세요.');
+
+  const candidateModels = [
+    'gemini-3.1-pro-preview',
+    'gemini-3.6-flash'
+  ];
+
   const parts = [{ text: prompt }];
   if (imageBase64) {
     parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
   }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
-    });
-    
-    if (!res.ok) {
-       // 3.1-pro-preview 실패 시 3-flash-preview로 재시도
-       if (model === 'gemini-3.1-pro-preview') {
-         console.warn('⚠️ gemini-3.1-pro-preview 호출 실패, gemini-3-flash-preview로 재시도합니다.');
-         model = 'gemini-3-flash-preview';
-         url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-         const resRetry = await fetch(url, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ contents: [{ parts }] }),
-         });
-         if (!resRetry.ok) throw new Error(`Gemini API 오류 (${model}): ` + resRetry.statusText);
-         const dataRetry = await resRetry.json();
-         return dataRetry.candidates?.[0]?.content?.parts?.[0]?.text || '';
-       }
-       throw new Error(`Gemini API 오류 (${model}): ` + res.statusText);
+  let lastError = null;
+
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData.error?.message || res.statusText;
+        console.warn(`⚠️ Gemini API (${model}) 호출 실패:`, msg);
+        lastError = new Error(`Gemini API 오류 (${model}): ` + msg);
+        continue;
+      }
+
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } catch (e) {
+      console.warn(`⚠️ Gemini API (${model}) 통신 에러:`, e.message);
+      lastError = e;
     }
-    
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  } catch (e) {
-    throw e;
   }
+
+  throw lastError || new Error('Gemini API 호출에 실패했습니다.');
+}
+
+async function saveApiSettings() {
+  const elGemini = document.getElementById('geminiKeyInput');
+  if (elGemini) {
+    state.settings.geminiApiKey = elGemini.value.trim();
+  }
+
+  try {
+    localStorage.setItem('ledger_app-settings', JSON.stringify(state.settings));
+  } catch (e) {
+    console.error('localStorage 저장 실패:', e);
+  }
+
+  toast('🔑 API 설정이 저장되었습니다.', 'success');
+}
+if (typeof window !== 'undefined') {
+  window.saveApiSettings = saveApiSettings;
+  window.__saveApiSettings = saveApiSettings;
 }
 
 // ── 영수증 OCR 파싱 ────────────────────────
@@ -625,47 +664,36 @@ class AppwriteDB {
   }
 
   async ensureSession() {
-    if (!this.online) return;
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('세션 확인 타임아웃(10초)')), 10000));
-    
+    if (!window.Appwrite) return;
     try {
-      await Promise.race([this.account.get(), timeout]);
+      await this.account.get();
       console.log('✅ 기존 세션 연결 성공');
+      this.online = true;
     } catch (e) {
-      this.logError('기존 세션 확인 실패: ' + e.message + (e.code ? ` (Code: ${e.code})` : ''));
       try {
-        console.log('💡 익명 세션 생성 시도 중...');
-        await Promise.race([this.account.createAnonymousSession(), timeout]);
+        await this.account.createAnonymousSession();
         console.log('✅ 익명 세션 생성 성공');
+        this.online = true;
       } catch (err) {
-        this.logError('익명 세션 생성 최종 실패: ' + err.message + (err.code ? ` (Code: ${err.code})` : ''));
+        console.warn('세션 수립 지연 (오프라인 모드 유지):', err.message);
         this.online = false;
       }
     }
   }
 
   async reconnect() {
-    this.logError('💡 서버 재연결 시도 중...');
     this.online = true;
     await this.ensureSession();
     if (window.checkDbStatus) window.checkDbStatus();
-    if (this.online) {
-      if (window.loadAll) await window.loadAll();
-      if (window.renderHome) window.renderHome();
-    }
   }
 
   async listDocs(colId, queries = []) {
-    await this.ready; // 🚀 세션 준비 완료까지 강제 대기 (레이스 컨디션 방지)
     if (this.online) {
       try {
-        // 🚀 데이터 누락 방지를 위해 기본 limit 상향
         const finalQueries = [...queries, window.Appwrite.Query.limit(5000)];
         return await this.databases.listDocuments(DB_ID, colId, finalQueries);
       } catch (e) {
-        console.warn(`${colId} 로드 실패:`, e.message);
-        this.online = false;
-        if(window.toast) window.toast('⚠️ 클라우드 연결 실패! 오프라인 모드로 앱을 시작합니다.', 'error');
+        console.warn(`${colId} 로드 지연/실패:`, e.message);
       }
     }
     return { documents: this.local.get(colId) };
@@ -2688,5 +2716,7 @@ async function forceUpdateApp() {
   }
   localStorage.removeItem('app-ver');
   toast('🔄 새 버전으로 갱신 중...', 'info');
-  setTimeout(() => window.location.reload(true), 1000);
+  setTimeout(() => {
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + new Date().getTime();
+  }, 1000);
 }

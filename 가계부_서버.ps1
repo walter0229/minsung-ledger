@@ -51,6 +51,9 @@ while ($listener.IsListening) {
 
             $content = [System.IO.File]::ReadAllBytes($localPath)
             $response.ContentType = $contentType
+            $response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate")
+            $response.Headers.Add("Pragma", "no-cache")
+            $response.Headers.Add("Expires", "0")
             $response.ContentLength64 = $content.Length
             $response.OutputStream.Write($content, 0, $content.Length)
         } else {

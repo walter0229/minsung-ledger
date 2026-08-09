@@ -63,47 +63,36 @@ class AppwriteDB {
   }
 
   async ensureSession() {
-    if (!this.online) return;
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('세션 확인 타임아웃(10초)')), 10000));
-    
+    if (!window.Appwrite) return;
     try {
-      await Promise.race([this.account.get(), timeout]);
+      await this.account.get();
       console.log('✅ 기존 세션 연결 성공');
+      this.online = true;
     } catch (e) {
-      this.logError('기존 세션 확인 실패: ' + e.message + (e.code ? ` (Code: ${e.code})` : ''));
       try {
-        console.log('💡 익명 세션 생성 시도 중...');
-        await Promise.race([this.account.createAnonymousSession(), timeout]);
+        await this.account.createAnonymousSession();
         console.log('✅ 익명 세션 생성 성공');
+        this.online = true;
       } catch (err) {
-        this.logError('익명 세션 생성 최종 실패: ' + err.message + (err.code ? ` (Code: ${err.code})` : ''));
+        console.warn('세션 수립 지연 (오프라인 모드 유지):', err.message);
         this.online = false;
       }
     }
   }
 
   async reconnect() {
-    this.logError('💡 서버 재연결 시도 중...');
     this.online = true;
     await this.ensureSession();
     if (window.checkDbStatus) window.checkDbStatus();
-    if (this.online) {
-      if (window.loadAll) await window.loadAll();
-      if (window.renderHome) window.renderHome();
-    }
   }
 
   async listDocs(colId, queries = []) {
-    await this.ready; // 🚀 세션 준비 완료까지 강제 대기 (레이스 컨디션 방지)
     if (this.online) {
       try {
-        // 🚀 데이터 누락 방지를 위해 기본 limit 상향
         const finalQueries = [...queries, window.Appwrite.Query.limit(5000)];
         return await this.databases.listDocuments(DB_ID, colId, finalQueries);
       } catch (e) {
-        console.warn(`${colId} 로드 실패:`, e.message);
-        this.online = false;
-        if(window.toast) window.toast('⚠️ 클라우드 연결 실패! 오프라인 모드로 앱을 시작합니다.', 'error');
+        console.warn(`${colId} 로드 지연/실패:`, e.message);
       }
     }
     return { documents: this.local.get(colId) };

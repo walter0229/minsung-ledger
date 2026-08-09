@@ -16,8 +16,13 @@ echo.
 :: 최신 모듈 코드로 통합(앱 빌드)
 node build.js
 
-:: 서버 실행과 동시에 브라우저 열기 (가장 확실한 조합)
-start http://127.0.0.1:3000
-npx -y serve . -p 3000
+:: 1. 웹 서버 배경 구동
+start /b npx -y serve . -p 3000
+
+:: 2. 서버 가동 완료 2초 대기
+timeout /t 2 /nobreak > nul
+
+:: 3. 서버 준비 완료 후 브라우저 열기
+start http://127.0.0.1:3000/index.html?v=1.420
 
 pause

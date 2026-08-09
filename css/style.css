@@ -138,6 +138,11 @@ html, body { height: 100%; overflow: hidden; font-family: var(--font); backgroun
 .form-input:focus, .form-select:focus { border-color: var(--accent); }
 .form-select option { background: var(--bg2); }
 
+/* 내역 입력란 폰트 강제 설정 */
+#txMemo, #transferMemo, #searchKeyword {
+  font-family: 'Noto Sans KR', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif !important;
+}
+
 .amount-input-wrap { position: relative; }
 .amount-symbol { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 16px; font-weight: 700; }
 .money-symbol { color: #9ca3af; font-weight: 400; margin-right: 1px; font-size: 0.9em; }

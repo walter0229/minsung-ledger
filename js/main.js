@@ -173,7 +173,7 @@ function renderTxList() {
         <span>${fmtDate(date)}</span>
         ${expenseHtml}
       </div>
-      ${list.map(t => window.renderTxItem ? window.renderTxItem(t) : '').join('')}
+      ${list.map(t => window.renderTxItem ? window.renderTxItem(t, 'home') : '').join('')}
     </div>
   `}).join('');
 }
@@ -227,5 +227,7 @@ export async function forceUpdateApp() {
   }
   localStorage.removeItem('app-ver');
   toast('🔄 새 버전으로 갱신 중...', 'info');
-  setTimeout(() => window.location.reload(true), 1000);
+  setTimeout(() => {
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + new Date().getTime();
+  }, 1000);
 }
