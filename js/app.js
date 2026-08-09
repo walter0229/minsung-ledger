@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.418';
+const APP_VERSION = '1.419';
 
 
 // =============================================
@@ -1435,24 +1435,27 @@ function renderTxItem(t, context = 'home') {
 
   const isReorder = window.txReorderMode && window.txReorderContext === context;
   let upDownBtns = '';
-  let reorderAttrs = '';
   
   if (isReorder) {
     upDownBtns = `
-      <div style="display:flex; flex-direction:column; justify-content:center; padding-left:8px; pointer-events:auto;">
-        <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▲</button>
-        <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▼</button>
+      <div style="display:flex; align-items:center; gap:6px; padding-left:8px; pointer-events:auto;">
+        <div class="drag-handle-btn" 
+             onpointerdown="window.txPointerDown(event, '${t.$id}', '${context}')" 
+             style="cursor:grab; padding:4px 8px; font-size:12px; color:#fff; background:linear-gradient(135deg,#7c6af7,#6366f1); border-radius:6px; user-select:none; touch-action:none; display:flex; align-items:center; gap:4px; font-weight:600; box-shadow:0 2px 6px rgba(124,106,247,0.4);" 
+             title="이곳을 누르고 위아래로 드래그하세요">
+          <span>☰</span> <span>이동</span>
+        </div>
+        <div style="display:flex; flex-direction:column; justify-content:center;">
+          <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:13px; color:var(--text2); cursor:pointer;">▲</button>
+          <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:13px; color:var(--text2); cursor:pointer;">▼</button>
+        </div>
       </div>
-    `;
-    reorderAttrs = `
-      data-id="${t.$id}" 
-      onpointerdown="window.txPointerDown(event, '${t.$id}', '${context}')"
     `;
   }
 
   const reorderClass = isReorder ? 'reorder-mode' : '';
 
-  return `<div class="tx-item ${reorderClass}" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`} ${reorderAttrs}>
+  return `<div class="tx-item ${reorderClass}" data-id="${t.$id}" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`}>
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
       <div class="tx-name">${txDisplayName}</div>
@@ -2020,33 +2023,40 @@ window.dragState = null;
 
 window.txPointerDown = function(e, id, context) {
   if (!window.txReorderMode) return;
-  if (e.target.tagName === 'BUTTON') return;
+  e.stopPropagation();
 
-  const itemEl = e.currentTarget;
+  const handleEl = e.currentTarget;
+  const itemEl = handleEl.closest('.tx-item');
+  if (!itemEl) return;
   
   window.dragState = {
     pointerId: e.pointerId,
     sourceId: id,
     context: context,
     itemEl: itemEl,
+    handleEl: handleEl,
     startY: e.clientY,
     isDragging: false,
     lastOverEl: null
   };
 
-  itemEl.setPointerCapture(e.pointerId);
-  itemEl.onpointermove = window.txPointerMove;
-  itemEl.onpointerup = window.txPointerUp;
-  itemEl.onpointercancel = window.txPointerUp;
+  try {
+    handleEl.setPointerCapture(e.pointerId);
+  } catch(err) {}
+
+  handleEl.onpointermove = window.txPointerMove;
+  handleEl.onpointerup = window.txPointerUp;
+  handleEl.onpointercancel = window.txPointerUp;
 };
 
 window.txPointerMove = function(e) {
   const s = window.dragState;
   if (!s) return;
 
-  if (!s.isDragging && Math.abs(e.clientY - s.startY) > 5) {
+  if (!s.isDragging && Math.abs(e.clientY - s.startY) > 3) {
     s.isDragging = true;
     s.itemEl.classList.add('tx-dragging');
+    s.handleEl.style.cursor = 'grabbing';
   }
 
   if (!s.isDragging) return;
@@ -2075,9 +2085,10 @@ window.txPointerUp = function(e) {
   const s = window.dragState;
   if (!s) return;
 
-  s.itemEl.onpointermove = null;
-  s.itemEl.onpointerup = null;
-  s.itemEl.onpointercancel = null;
+  s.handleEl.onpointermove = null;
+  s.handleEl.onpointerup = null;
+  s.handleEl.onpointercancel = null;
+  s.handleEl.style.cursor = 'grab';
   s.itemEl.classList.remove('tx-dragging');
 
   if (s.lastOverEl) {
