@@ -461,8 +461,8 @@ window.toggleTxReorder = async function(context) {
         for (const id of updates) {
           const newDate = window.txReorderPendingChanges[id];
           await window.db.updateTransaction(id, { date: newDate });
-          const idx = window.state.transactions.findIndex(t => t.$id === id);
-          if (idx >= 0) window.state.transactions[idx].date = newDate;
+          const idx = state.transactions.findIndex(t => t.$id === id);
+          if (idx >= 0) state.transactions[idx].date = newDate;
         }
         if (typeof window.toast === 'function') window.toast('✅ 순서가 저장되었습니다.');
       } catch (e) {
@@ -499,12 +499,12 @@ function refreshUI(context) {
 
 function getTxListForContext(context) {
   if (context === 'home') {
-    return window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+    return state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
       .sort((a, b) => b.date.localeCompare(a.date));
   } else {
     const accId = window.currentAccountHistoryId;
     if (!accId) return [];
-    return window.state.transactions.filter(t => 
+    return state.transactions.filter(t => 
       t.accountId === accId || 
       t.fromAccountId === accId || 
       t.toAccountId === accId

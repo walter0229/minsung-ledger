@@ -22,6 +22,7 @@ export const state = {
   currentMonth: new Date().toISOString().slice(0, 7),
   calendarDate: new Date(),
 };
+window.state = state;
 
 // ── 날짜 유틸 ──────────────────────────────
 export function todayStr() {
