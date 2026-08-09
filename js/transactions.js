@@ -38,6 +38,7 @@ export function renderTxItem(t, context = 'home') {
 
   const isReorder = window.txReorderMode && window.txReorderContext === context;
   let upDownBtns = '';
+  let dragProps = '';
   if (isReorder) {
     upDownBtns = `
       <div style="display:flex; flex-direction:column; justify-content:center; padding-left:8px;">
@@ -45,9 +46,18 @@ export function renderTxItem(t, context = 'home') {
         <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▼</button>
       </div>
     `;
+    dragProps = `
+      draggable="true" 
+      ondragstart="window.txDragStart(event, '${t.$id}')" 
+      ondragover="window.txDragOver(event)" 
+      ondrop="window.txDrop(event, '${t.$id}', '${context}')"
+      ondragenter="event.currentTarget.style.borderTop='2px solid var(--primary)'"
+      ondragleave="event.currentTarget.style.borderTop=''"
+      style="cursor: grab;"
+    `;
   }
 
-  return `<div class="tx-item" onclick="window.showTxDetail('${t.$id}')">
+  return `<div class="tx-item" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`} ${dragProps}>
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
       <div class="tx-name">${txDisplayName}</div>
@@ -604,5 +614,85 @@ window.moveTxDown = function(txId, context) {
     } else {
       if (typeof window.toast === 'function') window.toast('다른 날짜와는 순서를 바꿀 수 없습니다.', 'warning');
     }
+  }
+};
+
+window.txDragStart = function(e, id) {
+  e.dataTransfer.setData('text/plain', id);
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.style.opacity = '0.5';
+};
+
+window.txDragOver = function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+};
+
+window.txDrop = function(e, targetId, context) {
+  e.preventDefault();
+  e.currentTarget.style.borderTop = '';
+  e.currentTarget.style.opacity = '1';
+  const sourceId = e.dataTransfer.getData('text/plain');
+  if (!sourceId || sourceId === targetId) return;
+
+  let txs = [];
+  if (context === 'home') {
+    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (!el || !el.dataset.accountId) return;
+    const accId = el.dataset.accountId;
+    txs = window.state.transactions.filter(t => 
+      t.accountId === accId || 
+      t.fromAccountId === accId || 
+      t.toAccountId === accId
+    ).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const sourceIdx = txs.findIndex(t => t.$id === sourceId);
+  const targetIdx = txs.findIndex(t => t.$id === targetId);
+  
+  if (sourceIdx < 0 || targetIdx < 0) return;
+
+  const t1 = txs[sourceIdx];
+  const t2 = txs[targetIdx];
+  
+  const d1 = (t1.date || '').slice(0, 10);
+  const d2 = (t2.date || '').slice(0, 10);
+
+  if (d1 !== d2) {
+    if (typeof window.toast === 'function') window.toast('다른 날짜 영역으로는 이동할 수 없습니다.', 'warning');
+    return;
+  }
+
+  const sameDateTxs = txs.filter(t => (t.date || '').slice(0, 10) === d1);
+  const sIdx = sameDateTxs.findIndex(t => t.$id === sourceId);
+  const tIdx = sameDateTxs.findIndex(t => t.$id === targetId);
+  
+  const [movedItem] = sameDateTxs.splice(sIdx, 1);
+  sameDateTxs.splice(tIdx, 0, movedItem);
+
+  let hour = 23;
+  let min = 59;
+  for (const t of sameDateTxs) {
+    const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
+    const newDate = `${d1}T${newTimeStr}`;
+    
+    if (t.date !== newDate) {
+      t.date = newDate;
+      window.txReorderPendingChanges[t.$id] = newDate;
+    }
+    
+    min--;
+    if (min < 0) { min = 59; hour--; }
+    if (hour < 0) hour = 0;
+  }
+
+  if (context === 'home') {
+    if (window.renderHome) window.renderHome();
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (el && el.dataset.accountId) window.renderAccountHistory(el.dataset.accountId);
   }
 };
