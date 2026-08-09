@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.415';
+const APP_VERSION = '1.416';
 
 
 // =============================================
@@ -1410,7 +1410,7 @@ window.__openAddModal = openAddModal;
 // 민성이의 가계부 - 거래 및 모달 관리
 // =============================================
 
-function renderTxItem(t) {
+function renderTxItem(t, context = 'home') {
   let defaultIcon = 'etc';
   if (t.type === 'income') defaultIcon = 'income';
   else if (t.type === 'transfer') defaultIcon = 'transfer';
@@ -1433,6 +1433,17 @@ function renderTxItem(t) {
     }
   }
 
+  const isReorder = window.txReorderMode && window.txReorderContext === context;
+  let upDownBtns = '';
+  if (isReorder) {
+    upDownBtns = `
+      <div style="display:flex; flex-direction:column; justify-content:center; padding-left:8px;">
+        <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▲</button>
+        <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▼</button>
+      </div>
+    `;
+  }
+
   return `<div class="tx-item" onclick="window.showTxDetail('${t.$id}')">
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
@@ -1440,6 +1451,7 @@ function renderTxItem(t) {
       <div class="tx-cat">${t.mainCategory || ''} ${t.subCategory ? '> ' + t.subCategory : ''}</div>
     </div>
     <div class="tx-amount ${cls}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
+    ${upDownBtns}
   </div>`;
 }
 
@@ -1792,6 +1804,7 @@ function openAccountHistory(accountId) {
 function renderAccountHistory(accountId) {
   const el = document.getElementById('accountHistoryList');
   if (!el) return;
+  el.dataset.accountId = accountId;
 
   // 해당 계좌와 관련된 모든 거래 필터링 (계좌ID, 출금계좌ID, 입금계좌ID 중 하나라도 일치)
   const results = state.transactions.filter(t => 
@@ -1805,8 +1818,191 @@ function renderAccountHistory(accountId) {
     return;
   }
 
-  el.innerHTML = results.map(t => renderTxItem(t)).join('');
+  el.innerHTML = results.map(t => renderTxItem(t, 'account')).join('');
 }
+
+// ─────────────────────────────────────────────
+// 거래 내역 위치 변경 (순서 변경) 모드
+// ─────────────────────────────────────────────
+window.txReorderMode = false;
+window.txReorderContext = null;
+window.txReorderPendingChanges = {};
+
+window.toggleTxReorder = async function(context) {
+  if (window.txReorderMode && window.txReorderContext === context) {
+    window.txReorderMode = false;
+    window.txReorderContext = null;
+    
+    const btn = document.getElementById(context === 'home' ? 'btnReorderHome' : 'btnReorderAccount');
+    if (btn) btn.innerHTML = '↕️ 위치변경';
+
+    const updates = Object.keys(window.txReorderPendingChanges);
+    if (updates.length > 0) {
+      if (typeof window.showLoading === 'function') window.showLoading(true);
+      try {
+        for (const id of updates) {
+          const newDate = window.txReorderPendingChanges[id];
+          await window.db.updateTransaction(id, { date: newDate });
+          const idx = window.state.transactions.findIndex(t => t.$id === id);
+          if (idx >= 0) window.state.transactions[idx].date = newDate;
+        }
+        if (typeof window.toast === 'function') window.toast('✅ 순서가 저장되었습니다.');
+      } catch (e) {
+        console.error(e);
+        if (typeof window.toast === 'function') window.toast('❌ 저장 중 오류 발생', 'error');
+      }
+      window.txReorderPendingChanges = {};
+      if (typeof window.showLoading === 'function') window.showLoading(false);
+    }
+  } else {
+    window.txReorderMode = true;
+    window.txReorderContext = context;
+    window.txReorderPendingChanges = {};
+    
+    const btn = document.getElementById(context === 'home' ? 'btnReorderHome' : 'btnReorderAccount');
+    if (btn) btn.innerHTML = '💾 저장';
+    
+    assignExplicitTimesForReorder(context);
+  }
+
+  if (context === 'home') {
+    if (window.renderHome) window.renderHome();
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (el && el.dataset.accountId) {
+      renderAccountHistory(el.dataset.accountId);
+    }
+  }
+};
+
+function assignExplicitTimesForReorder(context) {
+  let txs = [];
+  if (context === 'home') {
+    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (!el || !el.dataset.accountId) return;
+    const accId = el.dataset.accountId;
+    txs = window.state.transactions.filter(t => 
+      t.accountId === accId || 
+      t.fromAccountId === accId || 
+      t.toAccountId === accId
+    ).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const groups = {};
+  txs.forEach(t => {
+    const d = (t.date || '').slice(0, 10);
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(t);
+  });
+
+  for (const date in groups) {
+    const list = groups[date];
+    let hour = 23;
+    let min = 59;
+    for (const t of list) {
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
+      const newDate = `${date}T${newTimeStr}`;
+      
+      if (t.date !== newDate) {
+        t.date = newDate;
+        window.txReorderPendingChanges[t.$id] = newDate;
+      }
+      
+      min--;
+      if (min < 0) { min = 59; hour--; }
+      if (hour < 0) hour = 0;
+    }
+  }
+}
+
+window.moveTxUp = function(txId, context) {
+  let txs = [];
+  if (context === 'home') {
+    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (!el || !el.dataset.accountId) return;
+    const accId = el.dataset.accountId;
+    txs = window.state.transactions.filter(t => 
+      t.accountId === accId || 
+      t.fromAccountId === accId || 
+      t.toAccountId === accId
+    ).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const idx = txs.findIndex(t => t.$id === txId);
+  if (idx > 0) {
+    const t1 = txs[idx];
+    const t2 = txs[idx - 1];
+    const d1 = (t1.date || '').slice(0, 10);
+    const d2 = (t2.date || '').slice(0, 10);
+    
+    if (d1 === d2) {
+      const tempDate = t1.date;
+      t1.date = t2.date;
+      t2.date = tempDate;
+      
+      window.txReorderPendingChanges[t1.$id] = t1.date;
+      window.txReorderPendingChanges[t2.$id] = t2.date;
+
+      if (context === 'home') {
+        if (window.renderHome) window.renderHome();
+      } else {
+        const el = document.getElementById('accountHistoryList');
+        if (el && el.dataset.accountId) renderAccountHistory(el.dataset.accountId);
+      }
+    } else {
+      if (typeof window.toast === 'function') window.toast('다른 날짜와는 순서를 바꿀 수 없습니다.', 'warning');
+    }
+  }
+};
+
+window.moveTxDown = function(txId, context) {
+  let txs = [];
+  if (context === 'home') {
+    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  } else {
+    const el = document.getElementById('accountHistoryList');
+    if (!el || !el.dataset.accountId) return;
+    const accId = el.dataset.accountId;
+    txs = window.state.transactions.filter(t => 
+      t.accountId === accId || 
+      t.fromAccountId === accId || 
+      t.toAccountId === accId
+    ).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const idx = txs.findIndex(t => t.$id === txId);
+  if (idx >= 0 && idx < txs.length - 1) {
+    const t1 = txs[idx];
+    const t2 = txs[idx + 1];
+    const d1 = (t1.date || '').slice(0, 10);
+    const d2 = (t2.date || '').slice(0, 10);
+    
+    if (d1 === d2) {
+      const tempDate = t1.date;
+      t1.date = t2.date;
+      t2.date = tempDate;
+      
+      window.txReorderPendingChanges[t1.$id] = t1.date;
+      window.txReorderPendingChanges[t2.$id] = t2.date;
+
+      if (context === 'home') {
+        if (window.renderHome) window.renderHome();
+      } else {
+        const el = document.getElementById('accountHistoryList');
+        if (el && el.dataset.accountId) renderAccountHistory(el.dataset.accountId);
+      }
+    } else {
+      if (typeof window.toast === 'function') window.toast('다른 날짜와는 순서를 바꿀 수 없습니다.', 'warning');
+    }
+  }
+};
 
 
 // =============================================
@@ -2662,7 +2858,7 @@ function renderTxList() {
         <span>${fmtDate(date)}</span>
         ${expenseHtml}
       </div>
-      ${list.map(t => window.renderTxItem ? window.renderTxItem(t) : '').join('')}
+      ${list.map(t => window.renderTxItem ? window.renderTxItem(t, 'home') : '').join('')}
     </div>
   `}).join('');
 }
