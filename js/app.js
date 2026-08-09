@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.420';
+const APP_VERSION = '1.421';
 
 
 // =============================================
@@ -1438,24 +1438,22 @@ function renderTxItem(t, context = 'home') {
   
   if (isReorder) {
     upDownBtns = `
-      <div style="display:flex; align-items:center; gap:6px; padding-left:8px; pointer-events:auto;">
-        <div class="drag-handle-btn" 
-             onpointerdown="window.txPointerDown(event, '${t.$id}', '${context}')" 
-             style="cursor:grab; padding:6px 10px; font-size:12px; color:#fff; background:linear-gradient(135deg,#7c6af7,#6366f1); border-radius:6px; user-select:none; touch-action:none; display:flex; align-items:center; gap:4px; font-weight:700; box-shadow:0 2px 8px rgba(124,106,247,0.5);" 
-             title="이곳을 누르고 위아래로 드래그하세요">
-          <span style="font-size:15px;">☰</span> <span>이동</span>
-        </div>
-        <div style="display:flex; flex-direction:column; justify-content:center;">
-          <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px 4px; font-size:13px; color:var(--text2); cursor:pointer;">▲</button>
-          <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px 4px; font-size:13px; color:var(--text2); cursor:pointer;">▼</button>
-        </div>
+      <div style="display:flex; gap:6px; padding-left:8px; align-items:center; flex-shrink:0; pointer-events:auto;">
+        <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" 
+                style="background:linear-gradient(135deg,#7c6af7,#6366f1); border:none; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(124,106,247,0.4);" 
+                title="위로 이동">
+          ▲ 위로
+        </button>
+        <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" 
+                style="background:var(--bg3); border:1px solid var(--border); color:var(--text1); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;" 
+                title="아래로 이동">
+          ▼ 아래로
+        </button>
       </div>
     `;
   }
 
-  const reorderClass = isReorder ? 'reorder-mode' : '';
-
-  return `<div class="tx-item ${reorderClass}" data-id="${t.$id}" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`}>
+  return `<div class="tx-item ${isReorder ? 'reorder-mode' : ''}" data-id="${t.$id}" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`}>
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
       <div class="tx-name">${txDisplayName}</div>
@@ -1788,6 +1786,7 @@ window.renderAccountHistory = renderAccountHistory;
 // 계좌 상세 내역 조회
 // ─────────────────────────────────────────────
 function openAccountHistory(accountId) {
+  window.currentAccountHistoryId = accountId;
   const acc = findAccount(accountId);
   if (!acc) return;
 
@@ -1813,11 +1812,15 @@ function openAccountHistory(accountId) {
 }
 
 function renderAccountHistory(accountId) {
+  if (!accountId) accountId = window.currentAccountHistoryId;
+  if (!accountId) return;
+  window.currentAccountHistoryId = accountId;
+
   const el = document.getElementById('accountHistoryList');
   if (!el) return;
   el.dataset.accountId = accountId;
 
-  // 해당 계좌와 관련된 모든 거래 필터링 (계좌ID, 출금계좌ID, 입금계좌ID 중 하나라도 일치)
+  // 해당 계좌와 관련된 모든 거래 필터링
   const results = state.transactions.filter(t => 
     t.accountId === accountId || 
     t.fromAccountId === accountId || 
@@ -1833,11 +1836,12 @@ function renderAccountHistory(accountId) {
 }
 
 // ─────────────────────────────────────────────
-// 거래 내역 위치 변경 (순서 변경) 모드
+// 거래 내역 위치 변경 (순서 변경) 모드 - 100% 직관적인 원클릭 순서 변경
 // ─────────────────────────────────────────────
 window.txReorderMode = false;
 window.txReorderContext = null;
 window.txReorderPendingChanges = {};
+window.currentAccountHistoryId = null;
 
 window.toggleTxReorder = async function(context) {
   if (window.txReorderMode && window.txReorderContext === context) {
@@ -1873,35 +1877,34 @@ window.toggleTxReorder = async function(context) {
     const btn = document.getElementById(context === 'home' ? 'btnReorderHome' : 'btnReorderAccount');
     if (btn) btn.innerHTML = '💾 저장';
     
-    assignExplicitTimesForReorder(context);
+    const txs = getTxListForContext(context);
+    reassignGroupTimes(txs);
   }
 
+  // 즉시 재렌더링
   if (context === 'home') {
     if (window.renderHome) window.renderHome();
   } else {
-    const el = document.getElementById('accountHistoryList');
-    if (el && el.dataset.accountId) {
-      renderAccountHistory(el.dataset.accountId);
-    }
+    if (window.renderAccountHistory) window.renderAccountHistory();
   }
 };
 
-function assignExplicitTimesForReorder(context) {
-  let txs = [];
+function getTxListForContext(context) {
   if (context === 'home') {
-    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
+    return window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
       .sort((a, b) => b.date.localeCompare(a.date));
   } else {
-    const el = document.getElementById('accountHistoryList');
-    if (!el || !el.dataset.accountId) return;
-    const accId = el.dataset.accountId;
-    txs = window.state.transactions.filter(t => 
+    const accId = window.currentAccountHistoryId;
+    if (!accId) return [];
+    return window.state.transactions.filter(t => 
       t.accountId === accId || 
       t.fromAccountId === accId || 
       t.toAccountId === accId
     ).sort((a, b) => b.date.localeCompare(a.date));
   }
+}
 
+function reassignGroupTimes(txs) {
   const groups = {};
   txs.forEach(t => {
     const d = (t.date || '').slice(0, 10);
@@ -1909,19 +1912,17 @@ function assignExplicitTimesForReorder(context) {
     groups[d].push(t);
   });
 
-  for (const date in groups) {
-    const list = groups[date];
+  for (const d in groups) {
+    const list = groups[d];
     let hour = 23;
     let min = 59;
     for (const t of list) {
       const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
-      const newDate = `${date}T${newTimeStr}`;
-      
-      if (t.date !== newDate) {
-        t.date = newDate;
-        window.txReorderPendingChanges[t.$id] = newDate;
+      const fullDate = `${d}T${newTimeStr}`;
+      if (t.date !== fullDate) {
+        t.date = fullDate;
+        window.txReorderPendingChanges[t.$id] = fullDate;
       }
-      
       min--;
       if (min < 0) { min = 59; hour--; }
       if (hour < 0) hour = 0;
@@ -1930,89 +1931,58 @@ function assignExplicitTimesForReorder(context) {
 }
 
 window.moveTxUp = function(txId, context) {
-  let txs = [];
-  if (context === 'home') {
-    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
-      .sort((a, b) => b.date.localeCompare(a.date));
-  } else {
-    const el = document.getElementById('accountHistoryList');
-    if (!el || !el.dataset.accountId) return;
-    const accId = el.dataset.accountId;
-    txs = window.state.transactions.filter(t => 
-      t.accountId === accId || 
-      t.fromAccountId === accId || 
-      t.toAccountId === accId
-    ).sort((a, b) => b.date.localeCompare(a.date));
+  const txs = getTxListForContext(context);
+  const idx = txs.findIndex(t => t.$id === txId);
+  if (idx <= 0) return;
+
+  const currentTx = txs[idx];
+  const targetTx = txs[idx - 1];
+
+  const targetDateStr = (targetTx.date || '').slice(0, 10);
+  const currentDateStr = (currentTx.date || '').slice(0, 10);
+
+  txs.splice(idx, 1);
+  txs.splice(idx - 1, 0, currentTx);
+
+  if (currentDateStr !== targetDateStr) {
+    const timePart = (currentTx.date || '').slice(10) || 'T12:00:00';
+    currentTx.date = targetDateStr + (timePart.startsWith('T') ? timePart : 'T' + timePart);
   }
 
-  const idx = txs.findIndex(t => t.$id === txId);
-  if (idx > 0) {
-    const t1 = txs[idx];
-    const t2 = txs[idx - 1];
-    const d1 = (t1.date || '').slice(0, 10);
-    const d2 = (t2.date || '').slice(0, 10);
-    
-    if (d1 === d2) {
-      const tempDate = t1.date;
-      t1.date = t2.date;
-      t2.date = tempDate;
-      
-      window.txReorderPendingChanges[t1.$id] = t1.date;
-      window.txReorderPendingChanges[t2.$id] = t2.date;
+  reassignGroupTimes(txs);
 
-      if (context === 'home') {
-        if (window.renderHome) window.renderHome();
-      } else {
-        const el = document.getElementById('accountHistoryList');
-        if (el && el.dataset.accountId) renderAccountHistory(el.dataset.accountId);
-      }
-    } else {
-      if (typeof window.toast === 'function') window.toast('다른 날짜와는 순서를 바꿀 수 없습니다.', 'warning');
-    }
+  if (context === 'home') {
+    if (window.renderHome) window.renderHome();
+  } else {
+    if (window.renderAccountHistory) window.renderAccountHistory();
   }
 };
 
 window.moveTxDown = function(txId, context) {
-  let txs = [];
-  if (context === 'home') {
-    txs = window.state.transactions.filter(t => t.date?.startsWith(window.state.currentMonth))
-      .sort((a, b) => b.date.localeCompare(a.date));
-  } else {
-    const el = document.getElementById('accountHistoryList');
-    if (!el || !el.dataset.accountId) return;
-    const accId = el.dataset.accountId;
-    txs = window.state.transactions.filter(t => 
-      t.accountId === accId || 
-      t.fromAccountId === accId || 
-      t.toAccountId === accId
-    ).sort((a, b) => b.date.localeCompare(a.date));
+  const txs = getTxListForContext(context);
+  const idx = txs.findIndex(t => t.$id === txId);
+  if (idx < 0 || idx >= txs.length - 1) return;
+
+  const currentTx = txs[idx];
+  const targetTx = txs[idx + 1];
+
+  const targetDateStr = (targetTx.date || '').slice(0, 10);
+  const currentDateStr = (currentTx.date || '').slice(0, 10);
+
+  txs.splice(idx, 1);
+  txs.splice(idx + 1, 0, currentTx);
+
+  if (currentDateStr !== targetDateStr) {
+    const timePart = (currentTx.date || '').slice(10) || 'T12:00:00';
+    currentTx.date = targetDateStr + (timePart.startsWith('T') ? timePart : 'T' + timePart);
   }
 
-  const idx = txs.findIndex(t => t.$id === txId);
-  if (idx >= 0 && idx < txs.length - 1) {
-    const t1 = txs[idx];
-    const t2 = txs[idx + 1];
-    const d1 = (t1.date || '').slice(0, 10);
-    const d2 = (t2.date || '').slice(0, 10);
-    
-    if (d1 === d2) {
-      const tempDate = t1.date;
-      t1.date = t2.date;
-      t2.date = tempDate;
-      
-      window.txReorderPendingChanges[t1.$id] = t1.date;
-      window.txReorderPendingChanges[t2.$id] = t2.date;
+  reassignGroupTimes(txs);
 
-      if (context === 'home') {
-        if (window.renderHome) window.renderHome();
-      } else {
-        const el = document.getElementById('accountHistoryList');
-        if (el && el.dataset.accountId) renderAccountHistory(el.dataset.accountId);
-      }
-    } else {
-      // Cross-date move via Up/Down buttons
-      window.processTxDrop(t1.$id, t2.$id, d2, context);
-    }
+  if (context === 'home') {
+    if (window.renderHome) window.renderHome();
+  } else {
+    if (window.renderAccountHistory) window.renderAccountHistory();
   }
 };
 
