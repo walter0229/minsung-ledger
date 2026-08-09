@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.417';
+const APP_VERSION = '1.418';
 
 
 // =============================================
@@ -1435,26 +1435,24 @@ function renderTxItem(t, context = 'home') {
 
   const isReorder = window.txReorderMode && window.txReorderContext === context;
   let upDownBtns = '';
-  let dragProps = '';
+  let reorderAttrs = '';
+  
   if (isReorder) {
     upDownBtns = `
-      <div style="display:flex; flex-direction:column; justify-content:center; padding-left:8px;">
+      <div style="display:flex; flex-direction:column; justify-content:center; padding-left:8px; pointer-events:auto;">
         <button onclick="event.stopPropagation(); window.moveTxUp('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▲</button>
         <button onclick="event.stopPropagation(); window.moveTxDown('${t.$id}', '${context}')" style="background:none; border:none; padding:2px; font-size:16px; color:var(--text2); cursor:pointer;">▼</button>
       </div>
     `;
-    dragProps = `
-      draggable="true" 
-      ondragstart="window.txDragStart(event, '${t.$id}')" 
-      ondragover="window.txDragOver(event)" 
-      ondrop="window.txDrop(event, '${t.$id}', '${context}')"
-      ondragenter="event.currentTarget.style.borderTop='2px solid var(--primary)'"
-      ondragleave="event.currentTarget.style.borderTop=''"
-      style="cursor: grab;"
+    reorderAttrs = `
+      data-id="${t.$id}" 
+      onpointerdown="window.txPointerDown(event, '${t.$id}', '${context}')"
     `;
   }
 
-  return `<div class="tx-item" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`} ${dragProps}>
+  const reorderClass = isReorder ? 'reorder-mode' : '';
+
+  return `<div class="tx-item ${reorderClass}" ${isReorder ? '' : `onclick="window.showTxDetail('${t.$id}')"`} ${reorderAttrs}>
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
       <div class="tx-name">${txDisplayName}</div>
@@ -2009,28 +2007,122 @@ window.moveTxDown = function(txId, context) {
         if (el && el.dataset.accountId) renderAccountHistory(el.dataset.accountId);
       }
     } else {
-      if (typeof window.toast === 'function') window.toast('다른 날짜와는 순서를 바꿀 수 없습니다.', 'warning');
+      // Cross-date move via Up/Down buttons
+      window.processTxDrop(t1.$id, t2.$id, d2, context);
     }
   }
 };
 
-window.txDragStart = function(e, id) {
-  e.dataTransfer.setData('text/plain', id);
-  e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.style.opacity = '0.5';
+// ─────────────────────────────────────────────
+// 포인터 기반 드래그 앤 드롭 (마우스/터치 완벽 지원 & 텍스트 드래그 방지)
+// ─────────────────────────────────────────────
+window.dragState = null;
+
+window.txPointerDown = function(e, id, context) {
+  if (!window.txReorderMode) return;
+  if (e.target.tagName === 'BUTTON') return;
+
+  const itemEl = e.currentTarget;
+  
+  window.dragState = {
+    pointerId: e.pointerId,
+    sourceId: id,
+    context: context,
+    itemEl: itemEl,
+    startY: e.clientY,
+    isDragging: false,
+    lastOverEl: null
+  };
+
+  itemEl.setPointerCapture(e.pointerId);
+  itemEl.onpointermove = window.txPointerMove;
+  itemEl.onpointerup = window.txPointerUp;
+  itemEl.onpointercancel = window.txPointerUp;
 };
 
-window.txDragOver = function(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
+window.txPointerMove = function(e) {
+  const s = window.dragState;
+  if (!s) return;
+
+  if (!s.isDragging && Math.abs(e.clientY - s.startY) > 5) {
+    s.isDragging = true;
+    s.itemEl.classList.add('tx-dragging');
+  }
+
+  if (!s.isDragging) return;
+
+  s.itemEl.style.pointerEvents = 'none';
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  s.itemEl.style.pointerEvents = '';
+
+  if (s.lastOverEl && s.lastOverEl !== target) {
+    s.lastOverEl.classList.remove('tx-drop-target');
+  }
+
+  const overItem = target?.closest('.tx-item');
+  const overGroup = target?.closest('.tx-date-group');
+
+  if (overItem && overItem !== s.itemEl) {
+    overItem.classList.add('tx-drop-target');
+    s.lastOverEl = overItem;
+  } else if (overGroup) {
+    overGroup.classList.add('tx-drop-target');
+    s.lastOverEl = overGroup;
+  }
 };
 
-window.txDrop = function(e, targetId, context) {
-  e.preventDefault();
-  e.currentTarget.style.borderTop = '';
-  e.currentTarget.style.opacity = '1';
-  const sourceId = e.dataTransfer.getData('text/plain');
-  if (!sourceId || sourceId === targetId) return;
+window.txPointerUp = function(e) {
+  const s = window.dragState;
+  if (!s) return;
+
+  s.itemEl.onpointermove = null;
+  s.itemEl.onpointerup = null;
+  s.itemEl.onpointercancel = null;
+  s.itemEl.classList.remove('tx-dragging');
+
+  if (s.lastOverEl) {
+    s.lastOverEl.classList.remove('tx-drop-target');
+  }
+
+  if (s.isDragging) {
+    s.itemEl.style.pointerEvents = 'none';
+    const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+    s.itemEl.style.pointerEvents = '';
+
+    const targetItemEl = dropTarget?.closest('.tx-item');
+    const targetGroupEl = dropTarget?.closest('.tx-date-group');
+
+    let targetId = targetItemEl?.dataset?.id || null;
+    let targetDate = targetGroupEl?.dataset?.date || null;
+
+    if (targetItemEl && !targetDate) {
+      const parentGroup = targetItemEl.closest('.tx-date-group');
+      if (parentGroup) targetDate = parentGroup.dataset.date;
+    }
+
+    if (targetId || targetDate) {
+      window.processTxDrop(s.sourceId, targetId, targetDate, s.context);
+    }
+  }
+
+  window.dragState = null;
+};
+
+window.processTxDrop = function(sourceId, targetId, targetDate, context) {
+  if (!sourceId) return;
+
+  const sourceTx = window.state.transactions.find(t => t.$id === sourceId);
+  if (!sourceTx) return;
+
+  let newDateStr = targetDate;
+  if (!newDateStr && targetId) {
+    const targetTx = window.state.transactions.find(t => t.$id === targetId);
+    if (targetTx) newDateStr = (targetTx.date || '').slice(0, 10);
+  }
+
+  if (!newDateStr) {
+    newDateStr = (sourceTx.date || '').slice(0, 10);
+  }
 
   let txs = [];
   if (context === 'home') {
@@ -2047,43 +2139,52 @@ window.txDrop = function(e, targetId, context) {
     ).sort((a, b) => b.date.localeCompare(a.date));
   }
 
-  const sourceIdx = txs.findIndex(t => t.$id === sourceId);
-  const targetIdx = txs.findIndex(t => t.$id === targetId);
-  
-  if (sourceIdx < 0 || targetIdx < 0) return;
+  if (sourceId === targetId && (sourceTx.date || '').slice(0, 10) === newDateStr) return;
 
-  const t1 = txs[sourceIdx];
-  const t2 = txs[targetIdx];
-  
-  const d1 = (t1.date || '').slice(0, 10);
-  const d2 = (t2.date || '').slice(0, 10);
+  const oldIdx = txs.findIndex(t => t.$id === sourceId);
+  if (oldIdx >= 0) txs.splice(oldIdx, 1);
 
-  if (d1 !== d2) {
-    if (typeof window.toast === 'function') window.toast('다른 날짜 영역으로는 이동할 수 없습니다.', 'warning');
-    return;
+  const currentTimePart = (sourceTx.date || '').slice(10) || 'T12:00:00';
+  sourceTx.date = newDateStr + (currentTimePart.startsWith('T') ? currentTimePart : 'T' + currentTimePart);
+
+  if (targetId) {
+    const targetIdx = txs.findIndex(t => t.$id === targetId);
+    if (targetIdx >= 0) {
+      txs.splice(targetIdx, 0, sourceTx);
+    } else {
+      txs.push(sourceTx);
+    }
+  } else {
+    const groupIdx = txs.findIndex(t => (t.date || '').slice(0, 10) === newDateStr);
+    if (groupIdx >= 0) {
+      txs.splice(groupIdx, 0, sourceTx);
+    } else {
+      txs.unshift(sourceTx);
+    }
   }
 
-  const sameDateTxs = txs.filter(t => (t.date || '').slice(0, 10) === d1);
-  const sIdx = sameDateTxs.findIndex(t => t.$id === sourceId);
-  const tIdx = sameDateTxs.findIndex(t => t.$id === targetId);
-  
-  const [movedItem] = sameDateTxs.splice(sIdx, 1);
-  sameDateTxs.splice(tIdx, 0, movedItem);
+  const groups = {};
+  txs.forEach(t => {
+    const d = (t.date || '').slice(0, 10);
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(t);
+  });
 
-  let hour = 23;
-  let min = 59;
-  for (const t of sameDateTxs) {
-    const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
-    const newDate = `${d1}T${newTimeStr}`;
-    
-    if (t.date !== newDate) {
-      t.date = newDate;
-      window.txReorderPendingChanges[t.$id] = newDate;
+  for (const d in groups) {
+    const list = groups[d];
+    let hour = 23;
+    let min = 59;
+    for (const t of list) {
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
+      const fullDate = `${d}T${newTimeStr}`;
+      if (t.date !== fullDate) {
+        t.date = fullDate;
+        window.txReorderPendingChanges[t.$id] = fullDate;
+      }
+      min--;
+      if (min < 0) { min = 59; hour--; }
+      if (hour < 0) hour = 0;
     }
-    
-    min--;
-    if (min < 0) { min = 59; hour--; }
-    if (hour < 0) hour = 0;
   }
 
   if (context === 'home') {
@@ -2943,7 +3044,7 @@ function renderTxList() {
     }
 
     return `
-    <div class="tx-date-group">
+    <div class="tx-date-group" data-date="${date}">
       <div class="tx-date-label" style="display: flex; justify-content: space-between; align-items: center;">
         <span>${fmtDate(date)}</span>
         ${expenseHtml}

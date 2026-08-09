@@ -168,7 +168,7 @@ function renderTxList() {
     }
 
     return `
-    <div class="tx-date-group">
+    <div class="tx-date-group" data-date="${date}">
       <div class="tx-date-label" style="display: flex; justify-content: space-between; align-items: center;">
         <span>${fmtDate(date)}</span>
         ${expenseHtml}
