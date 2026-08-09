@@ -485,12 +485,17 @@ window.toggleTxReorder = async function(context) {
   }
 
   // 즉시 재렌더링
+  refreshUI(context);
+};
+
+function refreshUI(context) {
   if (context === 'home') {
-    if (window.renderHome) window.renderHome();
+    if (window.renderTxList) window.renderTxList();
+    else if (window.renderHome) window.renderHome();
   } else {
     if (window.renderAccountHistory) window.renderAccountHistory();
   }
-};
+}
 
 function getTxListForContext(context) {
   if (context === 'home') {
@@ -553,12 +558,7 @@ window.moveTxUp = function(txId, context) {
   }
 
   reassignGroupTimes(txs);
-
-  if (context === 'home') {
-    if (window.renderHome) window.renderHome();
-  } else {
-    if (window.renderAccountHistory) window.renderAccountHistory();
-  }
+  refreshUI(context);
 };
 
 window.moveTxDown = function(txId, context) {
@@ -581,12 +581,7 @@ window.moveTxDown = function(txId, context) {
   }
 
   reassignGroupTimes(txs);
-
-  if (context === 'home') {
-    if (window.renderHome) window.renderHome();
-  } else {
-    if (window.renderAccountHistory) window.renderAccountHistory();
-  }
+  refreshUI(context);
 };
 
 // ─────────────────────────────────────────────

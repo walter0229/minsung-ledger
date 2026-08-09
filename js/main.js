@@ -136,7 +136,7 @@ async function renderAccountsList() {
   }).join('');
 }
 
-function renderTxList() {
+export function renderTxList() {
   const el = document.getElementById('txList');
   if(!el) return;
   const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
@@ -177,6 +177,7 @@ function renderTxList() {
     </div>
   `}).join('');
 }
+window.renderTxList = renderTxList;
 
 function renderBudgetAlerts() {
   const el = document.getElementById('budgetAlerts');

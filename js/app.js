@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.421';
+const APP_VERSION = '1.422';
 
 
 // =============================================
@@ -1882,12 +1882,17 @@ window.toggleTxReorder = async function(context) {
   }
 
   // 즉시 재렌더링
+  refreshUI(context);
+};
+
+function refreshUI(context) {
   if (context === 'home') {
-    if (window.renderHome) window.renderHome();
+    if (window.renderTxList) window.renderTxList();
+    else if (window.renderHome) window.renderHome();
   } else {
     if (window.renderAccountHistory) window.renderAccountHistory();
   }
-};
+}
 
 function getTxListForContext(context) {
   if (context === 'home') {
@@ -1950,12 +1955,7 @@ window.moveTxUp = function(txId, context) {
   }
 
   reassignGroupTimes(txs);
-
-  if (context === 'home') {
-    if (window.renderHome) window.renderHome();
-  } else {
-    if (window.renderAccountHistory) window.renderAccountHistory();
-  }
+  refreshUI(context);
 };
 
 window.moveTxDown = function(txId, context) {
@@ -1978,12 +1978,7 @@ window.moveTxDown = function(txId, context) {
   }
 
   reassignGroupTimes(txs);
-
-  if (context === 'home') {
-    if (window.renderHome) window.renderHome();
-  } else {
-    if (window.renderAccountHistory) window.renderAccountHistory();
-  }
+  refreshUI(context);
 };
 
 // ─────────────────────────────────────────────
@@ -3034,6 +3029,7 @@ function renderTxList() {
     </div>
   `}).join('');
 }
+window.renderTxList = renderTxList;
 
 function renderBudgetAlerts() {
   const el = document.getElementById('budgetAlerts');
