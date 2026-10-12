@@ -177,7 +177,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.423';
+const APP_VERSION = '1.424';
 
 
 // =============================================
@@ -700,6 +700,35 @@ class AppwriteDB {
     return { documents: this.local.get(colId) };
   }
 
+  // 🚀 데이터 건수 무제한 자동 연속 조회 (2년/4년 전 과거 데이터 영구 보장)
+  async listAllDocs(colId, baseQueries = []) {
+    if (this.online) {
+      try {
+        let allDocs = [];
+        let cursor = null;
+        const PAGE_SIZE = 5000;
+        while (true) {
+          const currentQueries = [
+            ...baseQueries,
+            window.Appwrite.Query.limit(PAGE_SIZE)
+          ];
+          if (cursor) {
+            currentQueries.push(window.Appwrite.Query.cursorAfter(cursor));
+          }
+          const res = await this.databases.listDocuments(DB_ID, colId, currentQueries);
+          if (!res || !res.documents || res.documents.length === 0) break;
+          allDocs = allDocs.concat(res.documents);
+          if (res.documents.length < PAGE_SIZE) break;
+          cursor = res.documents[res.documents.length - 1].$id;
+        }
+        return { documents: allDocs, total: allDocs.length };
+      } catch (e) {
+        console.warn(`${colId} 전량 로드 지연/실패:`, e.message);
+      }
+    }
+    return { documents: this.local.get(colId) };
+  }
+
   async createDoc(colId, data, docId = null) {
     await this.ready;
     const { $id, $createdAt, $updatedAt, $permissions, $databaseId, $collectionId, ...cleanData } = data;
@@ -758,9 +787,8 @@ class AppwriteDB {
   }
 
   async getTransactions() {
-    const res = await this.listDocs(COL.TRANSACTIONS, [
-      window.Appwrite.Query.orderDesc("date"),
-      window.Appwrite.Query.limit(1000)
+    const res = await this.listAllDocs(COL.TRANSACTIONS, [
+      window.Appwrite.Query.orderDesc("date")
     ]);
     return res.documents || [];
   }
