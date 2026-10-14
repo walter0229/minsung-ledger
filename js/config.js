@@ -159,7 +159,17 @@ export const ACCOUNT_TYPES = [
   { id: 'savings', name: '적금', emoji: '🐷' },
 ];
 
+// 수입 분류 정의
+export const INCOME_CATEGORIES = [
+  { id: 'salary', name: '급여', icon: 'income' },
+  { id: 'rent', name: '월세', icon: 'apartment_rent' },
+  { id: 'corp_card', name: '법카정리', icon: 'credit_card' },
+  { id: 'interest', name: '이자', icon: 'donation' },
+  { id: 'sponsorship', name: '찬조', icon: 'gift_box' },
+  { id: 'etc', name: '기타', icon: 'etc' },
+];
+
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.426';
+export const APP_VERSION = '1.427';

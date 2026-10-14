@@ -165,10 +165,20 @@ const ACCOUNT_TYPES = [
   { id: 'savings', name: '적금', emoji: '🐷' },
 ];
 
+// 수입 분류 정의
+const INCOME_CATEGORIES = [
+  { id: 'salary', name: '급여', icon: 'income' },
+  { id: 'rent', name: '월세', icon: 'apartment_rent' },
+  { id: 'corp_card', name: '법카정리', icon: 'credit_card' },
+  { id: 'interest', name: '이자', icon: 'donation' },
+  { id: 'sponsorship', name: '찬조', icon: 'gift_box' },
+  { id: 'etc', name: '기타', icon: 'etc' },
+];
+
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.426';
+const APP_VERSION = '1.427';
 
 
 // =============================================
@@ -1461,9 +1471,14 @@ window.__openAddModal = openAddModal;
 
 function renderTxItem(t, context = 'home') {
   let defaultIcon = 'etc';
-  if (t.type === 'income') defaultIcon = 'income';
-  else if (t.type === 'transfer') defaultIcon = 'transfer';
-  else if (t.mainCategory && MAIN_CAT_ICONS[t.mainCategory]) defaultIcon = MAIN_CAT_ICONS[t.mainCategory];
+  if (t.type === 'income') {
+    const matchedInc = INCOME_CATEGORIES.find(c => c.name === t.mainCategory);
+    defaultIcon = matchedInc ? matchedInc.icon : 'income';
+  } else if (t.type === 'transfer') {
+    defaultIcon = 'transfer';
+  } else if (t.mainCategory && MAIN_CAT_ICONS[t.mainCategory]) {
+    defaultIcon = MAIN_CAT_ICONS[t.mainCategory];
+  }
 
   const iconKey = t.iconKey && t.iconKey !== 'etc' ? t.iconKey : defaultIcon;
   const acc = findAccount(t.accountId || t.fromAccountId);
@@ -1529,8 +1544,11 @@ function openAddModal(txId = null) {
   document.getElementById('txMemo').value = '';
   
   renderMainCategories(); // 대분류 목록 채우기
+  renderIncomeCategories(); // 수입 분류 목록 채우기
   document.getElementById('mainCatSelect').value = '';
   document.getElementById('subCatSelect').innerHTML = '<option value="">소분류 선택</option>';
+  const elIncInit = document.getElementById('incomeCatSelect');
+  if (elIncInit) elIncInit.value = '';
 
   if (txId) {
     const t = state.transactions.find(tx => tx.$id === txId);
@@ -1540,10 +1558,15 @@ function openAddModal(txId = null) {
       document.getElementById('txAmount').value = Number(t.amount).toLocaleString();
       document.getElementById('txAmount').dataset.raw = String(t.amount);
       document.getElementById('txMemo').value = t.memo || '';
-      if (t.mainCategory) {
-        document.getElementById('mainCatSelect').value = t.mainCategory;
-        window.onMainCatChange();
-        setTimeout(() => { document.getElementById('subCatSelect').value = t.subCategory || ''; }, 50);
+      if (t.type === 'expense') {
+        if (t.mainCategory) {
+          document.getElementById('mainCatSelect').value = t.mainCategory;
+          window.onMainCatChange();
+          setTimeout(() => { document.getElementById('subCatSelect').value = t.subCategory || ''; }, 50);
+        }
+      } else if (t.type === 'income') {
+        const elInc = document.getElementById('incomeCatSelect');
+        if (elInc) elInc.value = t.mainCategory || '';
       }
       store.selectedTxAccountId = t.accountId || t.fromAccountId;
       store.selectedTxIcon = t.iconKey;
@@ -1567,9 +1590,14 @@ function setTxType(type, btn) {
   else document.querySelector(`.type-tab[data-type="${type}"]`)?.classList.add('active');
 
   const isTransfer = type === 'transfer';
+  const isExpense = type === 'expense';
+  const isIncome = type === 'income';
+
   document.getElementById('expenseIncomeForm').style.display = isTransfer ? 'none' : 'block';
   document.getElementById('transferForm').style.display = isTransfer ? 'block' : 'none';
-  document.getElementById('categorySection').style.display = type === 'expense' ? 'block' : 'none';
+  document.getElementById('categorySection').style.display = isExpense ? 'block' : 'none';
+  const elIncomeCat = document.getElementById('incomeCategorySection');
+  if (elIncomeCat) elIncomeCat.style.display = isIncome ? 'block' : 'none';
 
   updateAmountSymbol();
 }
@@ -1600,6 +1628,13 @@ function renderMainCategories() {
   const cats = Object.keys(CATEGORIES);
   el.innerHTML = '<option value="">대분류 선택</option>' + 
     cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function renderIncomeCategories() {
+  const el = document.getElementById('incomeCatSelect');
+  if (!el) return;
+  el.innerHTML = '<option value="">수입 분류 선택</option>' + 
+    INCOME_CATEGORIES.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
 }
 
 function renderTxAccountChips() {
@@ -1665,6 +1700,24 @@ async function saveTx() {
     const rawAmt = document.getElementById('transferAmount').dataset.raw || document.getElementById('transferAmount').value.replace(/,/g, '');
     if (!rawAmt) { toast('금액을 입력해주세요', 'error'); return; }
     data = { ...data, fromAccountId: store.selectedTransferFrom, toAccountId: store.selectedTransferTo, amount: Number(rawAmt), memo: document.getElementById('transferMemo').value, iconKey: 'transfer' };
+  } else if (store.currentTxType === 'income') {
+    if (!store.selectedTxAccountId) { toast('계좌를 선택해주세요', 'error'); return; }
+    const rawAmt = document.getElementById('txAmount').dataset.raw || document.getElementById('txAmount').value.replace(/,/g, '');
+    if (!rawAmt) { toast('금액을 입력해주세요', 'error'); return; }
+    
+    const incCat = document.getElementById('incomeCatSelect')?.value || '기타';
+    const matchedInc = INCOME_CATEGORIES.find(c => c.name === incCat);
+    const defaultIcon = matchedInc ? matchedInc.icon : 'income';
+
+    data = {
+      ...data,
+      accountId: store.selectedTxAccountId,
+      amount: Number(rawAmt),
+      memo: document.getElementById('txMemo').value,
+      mainCategory: incCat,
+      subCategory: '',
+      iconKey: store.selectedTxIcon || defaultIcon,
+    };
   } else {
     if (!store.selectedTxAccountId) { toast('계좌를 선택해주세요', 'error'); return; }
     const rawAmt = document.getElementById('txAmount').dataset.raw || document.getElementById('txAmount').value.replace(/,/g, '');
@@ -1676,7 +1729,7 @@ async function saveTx() {
       memo: document.getElementById('txMemo').value,
       mainCategory: document.getElementById('mainCatSelect').value,
       subCategory: document.getElementById('subCatSelect').value,
-      iconKey: store.selectedTxIcon || MAIN_CAT_ICONS[document.getElementById('mainCatSelect').value] || (store.currentTxType === 'income' ? 'income' : 'etc'),
+      iconKey: store.selectedTxIcon || MAIN_CAT_ICONS[document.getElementById('mainCatSelect').value] || 'etc',
     };
   }
 

@@ -13,9 +13,9 @@
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-  // 🚀 Clean Recovery & Save API Bridge (v1.426)
+  // 🚀 Clean Recovery & Save API Bridge (v1.427)
   (function() {
-    localStorage.setItem('app-ver', '1.426');
+    localStorage.setItem('app-ver', '1.427');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         for(let reg of regs) reg.unregister();
@@ -319,7 +319,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.426</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.427</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -406,7 +406,7 @@
 
       <!-- 지출/수입 폼 -->
       <div id="expenseIncomeForm">
-        <!-- 분류 (지출만) -->
+        <!-- 분류 (지출) -->
         <div class="form-group" id="categorySection">
           <label class="form-label">분류</label>
           <div class="cat-select-wrap">
@@ -417,6 +417,14 @@
               <option value="">소분류 선택</option>
             </select>
           </div>
+        </div>
+
+        <!-- 분류 (수입) -->
+        <div class="form-group" id="incomeCategorySection" style="display:none;">
+          <label class="form-label">수입 분류</label>
+          <select class="form-select" id="incomeCatSelect">
+            <option value="">수입 분류 선택</option>
+          </select>
         </div>
 
         <!-- 계좌 -->
@@ -604,6 +612,6 @@
     document.write('<script src="https://unpkg.com/appwrite@14.0.1/dist/iife/sdk.js"><\/script>');
   }
 </script>
-<script src="js/app.js?v=1.426"></script>
+<script src="js/app.js?v=1.427"></script>
 </body>
 </html>
