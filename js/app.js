@@ -178,7 +178,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.427';
+const APP_VERSION = '1.428';
 
 
 // =============================================
@@ -347,7 +347,18 @@ function calcBalance(accountId) {
     if (t.type === 'expense' && t.accountId === accountId) bal -= Number(t.amount);
     if (t.type === 'transfer') {
       if (t.fromAccountId === accountId) bal -= Number(t.amount);
-      if (t.toAccountId === accountId) bal += Number(t.amount);
+      if (t.toAccountId === accountId) {
+        let addAmt = Number(t.amount);
+        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
+          try {
+            const meta = JSON.parse(t.subCategory);
+            if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
+              addAmt = meta.toAmount;
+            }
+          } catch(e) {}
+        }
+        bal += addAmt;
+      }
     }
   }
   return bal;
@@ -1481,12 +1492,33 @@ function renderTxItem(t, context = 'home') {
   }
 
   const iconKey = t.iconKey && t.iconKey !== 'etc' ? t.iconKey : defaultIcon;
-  const acc = findAccount(t.accountId || t.fromAccountId);
-  const cur = acc?.currency || 'VND';
-  const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
-  const cls = t.type;
+  let acc = findAccount(t.accountId || t.fromAccountId);
+  let cur = acc?.currency || 'VND';
+  let amount = t.amount;
+  let sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
+  let cls = t.type;
 
-  let txDisplayName = t.memo || t.subCategory || t.mainCategory;
+  let meta = null;
+  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
+    try { meta = JSON.parse(t.subCategory); } catch(e) {}
+  }
+
+  // 계좌 상세 내역(context === 'account')인 경우 이체 금액 및 기호 맞춤
+  if (context === 'account' && t.type === 'transfer' && window.currentAccountHistoryId) {
+    const accId = window.currentAccountHistoryId;
+    if (t.toAccountId === accId) {
+      const toAcc = findAccount(t.toAccountId);
+      cur = toAcc?.currency || meta?.toCur || 'VND';
+      amount = meta && typeof meta.toAmount === 'number' ? meta.toAmount : t.amount;
+      sign = '<span class="money-symbol">+</span>';
+      cls = 'income';
+    } else if (t.fromAccountId === accId) {
+      sign = '<span class="money-symbol">-</span>';
+      cls = 'expense';
+    }
+  }
+
+  let txDisplayName = t.memo || (meta ? '' : t.subCategory) || t.mainCategory;
   if (!txDisplayName) {
     if (t.type === 'transfer') {
       const fromAcc = findAccount(t.fromAccountId);
@@ -1495,6 +1527,17 @@ function renderTxItem(t, context = 'home') {
     } else {
       txDisplayName = '내역 없음';
     }
+  }
+
+  let catDisplay = '';
+  if (t.type === 'transfer') {
+    if (meta && meta.rate && meta.toAmount) {
+      catDisplay = `환율 1:${meta.rate} (입금: ${fmtMoney(meta.toAmount, meta.toCur || 'VND')})`;
+    } else {
+      catDisplay = t.mainCategory || '이체';
+    }
+  } else {
+    catDisplay = `${t.mainCategory || ''} ${t.subCategory ? '> ' + t.subCategory : ''}`.trim();
   }
 
   const isReorder = window.txReorderMode === true;
@@ -1521,9 +1564,9 @@ function renderTxItem(t, context = 'home') {
     <div class="tx-icon">${iconImg(iconKey, 28)}</div>
     <div class="tx-info">
       <div class="tx-name">${txDisplayName}</div>
-      <div class="tx-cat">${t.mainCategory || ''} ${t.subCategory ? '> ' + t.subCategory : ''}</div>
+      <div class="tx-cat">${catDisplay}</div>
     </div>
-    <div class="tx-amount ${cls}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(t.amount) : t.amount, cur)}</div>
+    <div class="tx-amount ${cls}">${sign}${fmtMoney(t.type === 'expense' ? -Math.abs(amount) : amount, cur)}</div>
     ${upDownBtns}
   </div>`;
 }
@@ -1541,7 +1584,20 @@ function openAddModal(txId = null) {
   document.getElementById('addModalTitle').textContent = txId ? '거래 수정' : '거래 입력';
   document.getElementById('txDate').value = state.currentMonth ? (state.currentMonth + '-01') : ''; // fallback
   document.getElementById('txAmount').value = '';
+  delete document.getElementById('txAmount').dataset.raw;
   document.getElementById('txMemo').value = '';
+
+  // 이체 관련 필드 초기화
+  const transferAmtEl = document.getElementById('transferAmount');
+  if (transferAmtEl) { transferAmtEl.value = ''; delete transferAmtEl.dataset.raw; }
+  const transferMemoEl = document.getElementById('transferMemo');
+  if (transferMemoEl) transferMemoEl.value = '';
+  const rateInput = document.getElementById('transferExchangeRate');
+  if (rateInput) rateInput.value = '';
+  const convertedRes = document.getElementById('transferConvertedResult');
+  if (convertedRes) convertedRes.textContent = '0 ₫';
+  const exchangeWrap = document.getElementById('transferExchangeWrap');
+  if (exchangeWrap) exchangeWrap.style.display = 'none';
   
   renderMainCategories(); // 대분류 목록 채우기
   renderIncomeCategories(); // 수입 분류 목록 채우기
@@ -1567,6 +1623,23 @@ function openAddModal(txId = null) {
       } else if (t.type === 'income') {
         const elInc = document.getElementById('incomeCatSelect');
         if (elInc) elInc.value = t.mainCategory || '';
+      } else if (t.type === 'transfer') {
+        if (transferAmtEl) {
+          transferAmtEl.value = Number(t.amount).toLocaleString();
+          transferAmtEl.dataset.raw = String(t.amount);
+        }
+        if (transferMemoEl) transferMemoEl.value = t.memo || '';
+        store.selectedTransferFrom = t.fromAccountId;
+        store.selectedTransferTo = t.toAccountId;
+
+        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
+          try {
+            const meta = JSON.parse(t.subCategory);
+            if (meta && meta.rate && rateInput) {
+              rateInput.value = meta.rate;
+            }
+          } catch(e) {}
+        }
       }
       store.selectedTxAccountId = t.accountId || t.fromAccountId;
       store.selectedTxIcon = t.iconKey;
@@ -1579,6 +1652,7 @@ function openAddModal(txId = null) {
 
   renderTxAccountChips();
   renderTransferChips();
+  updateTransferExchangeUI();
   highlightSelectedIcon();
   openModal('addModal');
 }
@@ -1600,6 +1674,9 @@ function setTxType(type, btn) {
   if (elIncomeCat) elIncomeCat.style.display = isIncome ? 'block' : 'none';
 
   updateAmountSymbol();
+  if (isTransfer) {
+    updateTransferExchangeUI();
+  }
 }
 
 function updateAmountSymbol() {
@@ -1672,8 +1749,99 @@ function renderTransferChips() {
   makeChips('transferToChips', store.selectedTransferTo, 'selectTransferTo');
 }
 
-function selectTransferFrom(id) { store.selectedTransferFrom = id; renderTransferChips(); }
-function selectTransferTo(id) { store.selectedTransferTo = id; renderTransferChips(); }
+function selectTransferFrom(id) {
+  store.selectedTransferFrom = id;
+  renderTransferChips();
+  updateTransferExchangeUI();
+}
+
+function selectTransferTo(id) {
+  store.selectedTransferTo = id;
+  renderTransferChips();
+  updateTransferExchangeUI();
+}
+
+function updateTransferExchangeUI() {
+  const wrap = document.getElementById('transferExchangeWrap');
+  if (!wrap) return;
+
+  const fromAcc = findAccount(store.selectedTransferFrom);
+  const toAcc = findAccount(store.selectedTransferTo);
+
+  const fromCur = fromAcc?.currency || 'VND';
+  const toCur = toAcc?.currency || 'VND';
+
+  const symEl = document.getElementById('transferSymbol');
+  if (symEl) symEl.textContent = getCurrencySymbol(fromCur);
+
+  if (fromAcc && toAcc && fromCur !== toCur) {
+    wrap.style.display = 'block';
+
+    const titleEl = document.getElementById('transferExchangeTitle');
+    const labelEl = document.getElementById('transferRateLabel');
+    const rateSymEl = document.getElementById('transferRateSymbol');
+    const convertedLabel = document.getElementById('transferConvertedLabel');
+    const rateInput = document.getElementById('transferExchangeRate');
+
+    if (fromCur !== 'VND' && toCur === 'VND') {
+      if (titleEl) titleEl.textContent = `환율 및 VND 환산 (${fromCur} → VND)`;
+      if (labelEl) labelEl.textContent = `환율 (1 ${fromCur}당 VND)`;
+      if (rateSymEl) rateSymEl.textContent = '₫';
+      if (convertedLabel) convertedLabel.textContent = `베트남동(VND) 입금액:`;
+      if (rateInput && !rateInput.value) {
+        rateInput.placeholder = fromCur === 'USD' ? '예: 25400' : '예: 18.5';
+      }
+    } else if (fromCur === 'VND' && toCur !== 'VND') {
+      if (titleEl) titleEl.textContent = `환율 및 환산 (VND → ${toCur})`;
+      if (labelEl) labelEl.textContent = `환율 (1 ${toCur}당 VND)`;
+      if (rateSymEl) rateSymEl.textContent = '₫';
+      if (convertedLabel) convertedLabel.textContent = `${toCur} 입금액:`;
+      if (rateInput && !rateInput.value) {
+        rateInput.placeholder = toCur === 'USD' ? '예: 25400' : '예: 18.5';
+      }
+    } else {
+      if (titleEl) titleEl.textContent = `환율 및 환산 (${fromCur} → ${toCur})`;
+      if (labelEl) labelEl.textContent = `환율 (1 ${fromCur}당 ${toCur})`;
+      if (rateSymEl) rateSymEl.textContent = getCurrencySymbol(toCur);
+      if (convertedLabel) convertedLabel.textContent = `${toCur} 입금액:`;
+    }
+
+    updateTransferExchangeCalc();
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function updateTransferExchangeCalc() {
+  const fromAcc = findAccount(store.selectedTransferFrom);
+  const toAcc = findAccount(store.selectedTransferTo);
+  if (!fromAcc || !toAcc) return;
+
+  const fromCur = fromAcc.currency || 'VND';
+  const toCur = toAcc.currency || 'VND';
+  if (fromCur === toCur) return;
+
+  const amtInput = document.getElementById('transferAmount');
+  const rawAmt = Number(amtInput?.dataset?.raw || amtInput?.value?.replace(/,/g, '')) || 0;
+  const rateInput = document.getElementById('transferExchangeRate');
+  const rate = parseFloat(rateInput?.value) || 0;
+
+  let toAmount = 0;
+  if (rate > 0 && rawAmt > 0) {
+    if (fromCur !== 'VND' && toCur === 'VND') {
+      toAmount = Math.round(rawAmt * rate);
+    } else if (fromCur === 'VND' && toCur !== 'VND') {
+      toAmount = toCur === 'USD' ? Number((rawAmt / rate).toFixed(2)) : Math.round(rawAmt / rate);
+    } else {
+      toAmount = Math.round(rawAmt * rate);
+    }
+  }
+
+  const resEl = document.getElementById('transferConvertedResult');
+  if (resEl) {
+    resEl.textContent = fmtMoney(toAmount, toCur);
+  }
+}
 
 function selectTxIcon(key) {
   store.selectedTxIcon = key;
@@ -1697,9 +1865,54 @@ async function saveTx() {
 
   if (store.currentTxType === 'transfer') {
     if (!store.selectedTransferFrom || !store.selectedTransferTo) { toast('출/입금 계좌 선택요망', 'error'); return; }
+    if (store.selectedTransferFrom === store.selectedTransferTo) { toast('출금 계좌와 입금 계좌가 같습니다', 'error'); return; }
     const rawAmt = document.getElementById('transferAmount').dataset.raw || document.getElementById('transferAmount').value.replace(/,/g, '');
-    if (!rawAmt) { toast('금액을 입력해주세요', 'error'); return; }
-    data = { ...data, fromAccountId: store.selectedTransferFrom, toAccountId: store.selectedTransferTo, amount: Number(rawAmt), memo: document.getElementById('transferMemo').value, iconKey: 'transfer' };
+    if (!rawAmt || Number(rawAmt) <= 0) { toast('금액을 입력해주세요', 'error'); return; }
+
+    const fromAcc = findAccount(store.selectedTransferFrom);
+    const toAcc = findAccount(store.selectedTransferTo);
+    const fromCur = fromAcc?.currency || 'VND';
+    const toCur = toAcc?.currency || 'VND';
+
+    let mainCat = '이체';
+    let subCat = '';
+
+    if (fromCur !== toCur) {
+      const rateInput = document.getElementById('transferExchangeRate');
+      const rateVal = parseFloat(rateInput?.value);
+      if (!rateVal || rateVal <= 0) {
+        toast('환율을 올바르게 입력해주세요', 'error');
+        return;
+      }
+      const numRaw = Number(rawAmt);
+      let toAmount = 0;
+      if (fromCur !== 'VND' && toCur === 'VND') {
+        toAmount = Math.round(numRaw * rateVal);
+      } else if (fromCur === 'VND' && toCur !== 'VND') {
+        toAmount = toCur === 'USD' ? Number((numRaw / rateVal).toFixed(2)) : Math.round(numRaw / rateVal);
+      } else {
+        toAmount = Math.round(numRaw * rateVal);
+      }
+
+      mainCat = '환전이체';
+      subCat = JSON.stringify({
+        rate: rateVal,
+        toAmount: toAmount,
+        fromCur: fromCur,
+        toCur: toCur
+      });
+    }
+
+    data = {
+      ...data,
+      fromAccountId: store.selectedTransferFrom,
+      toAccountId: store.selectedTransferTo,
+      amount: Number(rawAmt),
+      memo: document.getElementById('transferMemo').value,
+      mainCategory: mainCat,
+      subCategory: subCat,
+      iconKey: 'transfer'
+    };
   } else if (store.currentTxType === 'income') {
     if (!store.selectedTxAccountId) { toast('계좌를 선택해주세요', 'error'); return; }
     const rawAmt = document.getElementById('txAmount').dataset.raw || document.getElementById('txAmount').value.replace(/,/g, '');
@@ -1763,6 +1976,24 @@ function showTxDetail(txId) {
   const cur = acc?.currency || 'VND';
   const toAcc = t.toAccountId ? findAccount(t.toAccountId) : null;
 
+  let meta = null;
+  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
+    try { meta = JSON.parse(t.subCategory); } catch(e){}
+  }
+
+  let catDisplay = `${t.mainCategory || ''}${t.subCategory ? ' > ' + t.subCategory : ''}`;
+  if (t.type === 'transfer' && meta) {
+    catDisplay = '환전이체';
+  }
+
+  let exchangeDetailHtml = '';
+  if (meta) {
+    exchangeDetailHtml = `
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">적용 환율</span><span>1 ${meta.fromCur} = ${meta.rate} ${meta.toCur}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">입금 환산액</span><span style="font-weight:700;color:var(--accent);">${fmtMoney(meta.toAmount, meta.toCur)}</span></div>
+    `;
+  }
+
   const body = document.getElementById('txDetailBody');
   body.innerHTML = `
     <div style="text-align:center;padding:16px 0;">
@@ -1776,10 +2007,11 @@ function showTxDetail(txId) {
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;display:flex;flex-direction:column;gap:10px;">
       <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">날짜</span><span>${fmtDate(t.date?.slice(0,10))}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">유형</span><span>${t.type==='expense'?'지출':t.type==='income'?'수입':'이체'}</span></div>
-      ${t.mainCategory?`<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">분류</span><span>${t.mainCategory}${t.subCategory?' > '+t.subCategory:''}</span></div>`:''}
-      ${acc?`<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">계좌</span><span>${acc.name}</span></div>`:''}
-      ${toAcc?`<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">입금계좌</span><span>${toAcc.name}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">유형</span><span>${t.type==='expense'?'지출':t.type==='income'?'수입':(meta ? '환전이체' : '이체')}</span></div>
+      ${catDisplay ? `<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">분류</span><span>${catDisplay}</span></div>` : ''}
+      ${acc ? `<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">${t.type==='transfer'?'출금계좌':'계좌'}</span><span>${acc.name} (${acc.currency})</span></div>` : ''}
+      ${toAcc ? `<div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--text2)">입금계좌</span><span>${toAcc.name} (${toAcc.currency})</span></div>` : ''}
+      ${exchangeDetailHtml}
     </div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button class="btn-secondary btn-sm" style="flex:1;" onclick="window.closeModal('txDetailModal');window.openAddModal('${txId}')">✏️ 수정</button>
@@ -1875,6 +2107,8 @@ window.onMainCatChange = onMainCatChange;
 window.selectTxAccount = selectTxAccount;
 window.selectTransferFrom = selectTransferFrom;
 window.selectTransferTo = selectTransferTo;
+window.updateTransferExchangeUI = updateTransferExchangeUI;
+window.updateTransferExchangeCalc = updateTransferExchangeCalc;
 window.selectTxIcon = selectTxIcon;
 window.saveTx = saveTx;
 window.showTxDetail = showTxDetail;

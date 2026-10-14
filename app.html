@@ -13,9 +13,9 @@
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-  // 🚀 Clean Recovery & Save API Bridge (v1.427)
+  // 🚀 Clean Recovery & Save API Bridge (v1.428)
   (function() {
-    localStorage.setItem('app-ver', '1.427');
+    localStorage.setItem('app-ver', '1.428');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         for(let reg of regs) reg.unregister();
@@ -319,7 +319,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.427</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.428</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -470,7 +470,24 @@
           <label class="form-label">금액</label>
           <div class="amount-input-wrap">
             <span class="amount-symbol" id="transferSymbol">₫</span>
-            <input type="text" inputmode="numeric" class="form-input" id="transferAmount" placeholder="0" oninput="formatNumberInput(this)">
+            <input type="text" inputmode="numeric" class="form-input" id="transferAmount" placeholder="0" oninput="formatNumberInput(this); if(window.updateTransferExchangeCalc) window.updateTransferExchangeCalc();">
+          </div>
+        </div>
+        <!-- 환율 및 베트남동 환산 (이종 통화 시 표시) -->
+        <div id="transferExchangeWrap" style="display:none; background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:12px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+            <span>💱</span> <span id="transferExchangeTitle">환율 및 환산 금액</span>
+          </div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label" id="transferRateLabel" style="font-size:11px;">환율 (1 외화당 VND)</label>
+            <div class="amount-input-wrap">
+              <span class="amount-symbol" id="transferRateSymbol">₫</span>
+              <input type="text" inputmode="decimal" class="form-input" id="transferExchangeRate" placeholder="예: 18.5" oninput="if(window.updateTransferExchangeCalc) window.updateTransferExchangeCalc();">
+            </div>
+          </div>
+          <div style="background:var(--bg2); border-radius:8px; padding:10px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:12px; color:var(--text2);" id="transferConvertedLabel">베트남동(VND) 입금액:</span>
+            <span id="transferConvertedResult" style="font-size:15px; font-weight:800; color:var(--accent);">0 ₫</span>
           </div>
         </div>
         <div class="form-group">
@@ -612,6 +629,6 @@
     document.write('<script src="https://unpkg.com/appwrite@14.0.1/dist/iife/sdk.js"><\/script>');
   }
 </script>
-<script src="js/app.js?v=1.427"></script>
+<script src="js/app.js?v=1.428"></script>
 </body>
 </html>

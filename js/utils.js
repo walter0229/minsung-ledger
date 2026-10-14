@@ -133,7 +133,18 @@ export function calcBalance(accountId) {
     if (t.type === 'expense' && t.accountId === accountId) bal -= Number(t.amount);
     if (t.type === 'transfer') {
       if (t.fromAccountId === accountId) bal -= Number(t.amount);
-      if (t.toAccountId === accountId) bal += Number(t.amount);
+      if (t.toAccountId === accountId) {
+        let addAmt = Number(t.amount);
+        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
+          try {
+            const meta = JSON.parse(t.subCategory);
+            if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
+              addAmt = meta.toAmount;
+            }
+          } catch(e) {}
+        }
+        bal += addAmt;
+      }
     }
   }
   return bal;
