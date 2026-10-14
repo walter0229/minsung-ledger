@@ -90,55 +90,46 @@ const ICONS = {
 // 카테고리 정의
 const CATEGORIES = {
   한국: [
-    { id: 'family_kr', name: '가족용돈', icon: 'family_kr' },
-    { id: 'phone', name: '전화비', icon: 'phone' },
-    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
-    { id: 'apartment', name: '관리비', icon: 'apartment' },
+    { id: 'family_kr', name: '어머니용돈', icon: 'family_kr' },
+    { id: 'phone', name: '한국휴대폰', icon: 'phone' },
+    { id: 'apartment_rent', name: '월세 110', icon: 'apartment_rent' },
     { id: 'insurance', name: '보험료', icon: 'insurance' },
-    { id: 'gift_box', name: '경조사비', icon: 'gift_box' },
+    { id: 'loan', name: '대출', icon: 'loan' },
     { id: 'etc', name: '기타', icon: 'etc' },
   ],
   식비: [
-    { id: 'food', name: '식사', icon: 'food' },
+    { id: 'alcohol', name: '외식', icon: 'alcohol' },
+    { id: 'food', name: '배달', icon: 'food' },
     { id: 'grocery', name: '장보기', icon: 'grocery' },
-    { id: 'drink', name: '음료/카페', icon: 'drink' },
-    { id: 'snack', name: '간식', icon: 'snack' },
-    { id: 'alcohol', name: '술', icon: 'alcohol' },
   ],
-  '주거/생활': [
-    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
+  주거생활: [
     { id: 'apartment', name: '관리비', icon: 'apartment' },
-    { id: 'electricity', name: '전기', icon: 'electricity' },
-    { id: 'water', name: '수도', icon: 'water' },
-    { id: 'phone', name: '통신', icon: 'phone' },
-    { id: 'cleaning', name: '청소', icon: 'cleaning' },
-    { id: 'subscription', name: '구독', icon: 'subscription' },
-    { id: 'daily_necessity', name: '생필품', icon: 'shopping' },
+    { id: 'electricity', name: '전기세', icon: 'electricity' },
+    { id: 'water', name: '수도세', icon: 'water' },
+    { id: 'phone', name: '휴대폰/인터넷', icon: 'phone' },
+    { id: 'cleaning', name: '청소비', icon: 'cleaning' },
+    { id: 'subscription', name: '구독료', icon: 'subscription' },
+    { id: 'shopping', name: '쇼핑', icon: 'shopping' },
+    { id: 'pet_cat', name: '반려동물', icon: 'pet_cat' },
+    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
   ],
   '사회생활/여가': [
     { id: 'golf', name: '골프', icon: 'golf' },
     { id: 'billiards', name: '당구', icon: 'billiards' },
-    { id: 'travel', name: '여행', icon: 'travel' },
-    { id: 'date_rose', name: '데이트', icon: 'date_rose' },
-    { id: 'gift_box', name: '선물', icon: 'gift_box' },
-    { id: 'donation', name: '헌금/기부', icon: 'donation' },
-    { id: 'tip_vn', name: '팁(베트남)', icon: 'tip_vn' },
-    { id: 'commission', name: '수수료', icon: 'commission' },
-  ],
-  '자기개발/건강': [
-    { id: 'hospital', name: '병원', icon: 'hospital' },
-    { id: 'pharmacy', name: '약', icon: 'pharmacy' },
-    { id: 'beauty', name: '미용', icon: 'beauty' },
     { id: 'massage', name: '마사지', icon: 'massage' },
-    { id: 'pet_cat', name: '반려동물', icon: 'pet_cat' },
+    { id: 'beauty', name: '미용', icon: 'beauty' },
+    { id: 'travel', name: '여행', icon: 'travel' },
+    { id: 'donation', name: '헌금/기부', icon: 'donation' },
+    { id: 'tip_vn', name: '팁', icon: 'tip_vn' },
     { id: 'cigarette', name: '담배', icon: 'cigarette' },
+    { id: 'transport', name: '교통', icon: 'transport' },
+  ],
+  건강: [
+    { id: 'hospital', name: '병원비', icon: 'hospital' },
+    { id: 'pharmacy', name: '약값', icon: 'pharmacy' },
+    { id: 'health', name: '운동관련', icon: 'health' },
   ],
   기타: [
-    { id: 'transport', name: '교통', icon: 'transport' },
-    { id: 'shopping', name: '쇼핑', icon: 'shopping' },
-    { id: 'loan', name: '대출', icon: 'loan' },
-    { id: 'credit_card', name: '신용카드', icon: 'credit_card' },
-    { id: 'lotto', name: '로또', icon: 'lotto' },
     { id: 'data_correction', name: '데이터수정', icon: 'data_correction' },
     { id: 'etc', name: '기타', icon: 'etc' },
   ],
@@ -148,9 +139,9 @@ const CATEGORIES = {
 const MAIN_CAT_ICONS = {
   '한국': 'family_kr',
   '식비': 'food',
-  '주거/생활': 'housing',
+  '주거생활': 'housing',
   '사회생활/여가': 'leisure',
-  '자기개발/건강': 'health',
+  '건강': 'health',
   '기타': 'etc'
 };
 
@@ -177,7 +168,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.424';
+const APP_VERSION = '1.425';
 
 
 // =============================================
@@ -569,12 +560,12 @@ async function parseReceipt(imageBase64) {
 3. 오직 영수증에 적힌 **개별 상품(품목)의 이름과 금액**들만 리스트로 만들어주세요.
 4. 원래 품목명이 베트남어인 경우, 'translatedName' 필드에 한국어로 번역한 이름을 반드시 넣어주세요.
 5. 카테고리는 반드시 아래 목록 중에서 가장 적절한 것을 선택해줘:
-- 식비: [식사, 장보기, 음료/카페, 간식, 술]
-- 주거/생활: [아파트, 월세, 관리비, 전기, 수도, 통신, 청소, 구독, 생필품]
-- 사회생활/여가: [여가, 골프, 당구, 여행, 데이트, 선물, 헌금/기부, 팁(베트남), 수수료]
-- 자기개발/건강: [건강, 미용, 마사지, 반려동물, 담배, 로또]
-- 기타: [교통, 쇼핑, 대출, 신용카드, 임대료(달러), 데이터수정, 기타]
-- 한국: [가족용돈, 전화비, 월세, 관리비, 보험료, 경조사비, 기타]`;
+- 한국: [어머니용돈, 한국휴대폰, 월세 110, 보험료, 대출, 기타]
+- 식비: [외식, 배달, 장보기]
+- 주거생활: [관리비, 전기세, 수도세, 휴대폰/인터넷, 청소비, 구독료, 쇼핑, 반려동물, 월세]
+- 사회생활/여가: [골프, 당구, 마사지, 미용, 여행, 헌금/기부, 팁, 담배, 교통]
+- 건강: [병원비, 약값, 운동관련]
+- 기타: [데이터수정, 기타]`;
   const text = await callGemini(prompt, imageBase64);
   try {
     const clean = text.replace(/```json|```/g, '').trim();

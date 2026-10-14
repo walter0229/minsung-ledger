@@ -84,55 +84,46 @@ export const ICONS = {
 // 카테고리 정의
 export const CATEGORIES = {
   한국: [
-    { id: 'family_kr', name: '가족용돈', icon: 'family_kr' },
-    { id: 'phone', name: '전화비', icon: 'phone' },
-    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
-    { id: 'apartment', name: '관리비', icon: 'apartment' },
+    { id: 'family_kr', name: '어머니용돈', icon: 'family_kr' },
+    { id: 'phone', name: '한국휴대폰', icon: 'phone' },
+    { id: 'apartment_rent', name: '월세 110', icon: 'apartment_rent' },
     { id: 'insurance', name: '보험료', icon: 'insurance' },
-    { id: 'gift_box', name: '경조사비', icon: 'gift_box' },
+    { id: 'loan', name: '대출', icon: 'loan' },
     { id: 'etc', name: '기타', icon: 'etc' },
   ],
   식비: [
-    { id: 'food', name: '식사', icon: 'food' },
+    { id: 'alcohol', name: '외식', icon: 'alcohol' },
+    { id: 'food', name: '배달', icon: 'food' },
     { id: 'grocery', name: '장보기', icon: 'grocery' },
-    { id: 'drink', name: '음료/카페', icon: 'drink' },
-    { id: 'snack', name: '간식', icon: 'snack' },
-    { id: 'alcohol', name: '술', icon: 'alcohol' },
   ],
-  '주거/생활': [
-    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
+  주거생활: [
     { id: 'apartment', name: '관리비', icon: 'apartment' },
-    { id: 'electricity', name: '전기', icon: 'electricity' },
-    { id: 'water', name: '수도', icon: 'water' },
-    { id: 'phone', name: '통신', icon: 'phone' },
-    { id: 'cleaning', name: '청소', icon: 'cleaning' },
-    { id: 'subscription', name: '구독', icon: 'subscription' },
-    { id: 'daily_necessity', name: '생필품', icon: 'shopping' },
+    { id: 'electricity', name: '전기세', icon: 'electricity' },
+    { id: 'water', name: '수도세', icon: 'water' },
+    { id: 'phone', name: '휴대폰/인터넷', icon: 'phone' },
+    { id: 'cleaning', name: '청소비', icon: 'cleaning' },
+    { id: 'subscription', name: '구독료', icon: 'subscription' },
+    { id: 'shopping', name: '쇼핑', icon: 'shopping' },
+    { id: 'pet_cat', name: '반려동물', icon: 'pet_cat' },
+    { id: 'apartment_rent', name: '월세', icon: 'apartment_rent' },
   ],
   '사회생활/여가': [
     { id: 'golf', name: '골프', icon: 'golf' },
     { id: 'billiards', name: '당구', icon: 'billiards' },
-    { id: 'travel', name: '여행', icon: 'travel' },
-    { id: 'date_rose', name: '데이트', icon: 'date_rose' },
-    { id: 'gift_box', name: '선물', icon: 'gift_box' },
-    { id: 'donation', name: '헌금/기부', icon: 'donation' },
-    { id: 'tip_vn', name: '팁(베트남)', icon: 'tip_vn' },
-    { id: 'commission', name: '수수료', icon: 'commission' },
-  ],
-  '자기개발/건강': [
-    { id: 'hospital', name: '병원', icon: 'hospital' },
-    { id: 'pharmacy', name: '약', icon: 'pharmacy' },
-    { id: 'beauty', name: '미용', icon: 'beauty' },
     { id: 'massage', name: '마사지', icon: 'massage' },
-    { id: 'pet_cat', name: '반려동물', icon: 'pet_cat' },
+    { id: 'beauty', name: '미용', icon: 'beauty' },
+    { id: 'travel', name: '여행', icon: 'travel' },
+    { id: 'donation', name: '헌금/기부', icon: 'donation' },
+    { id: 'tip_vn', name: '팁', icon: 'tip_vn' },
     { id: 'cigarette', name: '담배', icon: 'cigarette' },
+    { id: 'transport', name: '교통', icon: 'transport' },
+  ],
+  건강: [
+    { id: 'hospital', name: '병원비', icon: 'hospital' },
+    { id: 'pharmacy', name: '약값', icon: 'pharmacy' },
+    { id: 'health', name: '운동관련', icon: 'health' },
   ],
   기타: [
-    { id: 'transport', name: '교통', icon: 'transport' },
-    { id: 'shopping', name: '쇼핑', icon: 'shopping' },
-    { id: 'loan', name: '대출', icon: 'loan' },
-    { id: 'credit_card', name: '신용카드', icon: 'credit_card' },
-    { id: 'lotto', name: '로또', icon: 'lotto' },
     { id: 'data_correction', name: '데이터수정', icon: 'data_correction' },
     { id: 'etc', name: '기타', icon: 'etc' },
   ],
@@ -142,9 +133,9 @@ export const CATEGORIES = {
 export const MAIN_CAT_ICONS = {
   '한국': 'family_kr',
   '식비': 'food',
-  '주거/생활': 'housing',
+  '주거생활': 'housing',
   '사회생활/여가': 'leisure',
-  '자기개발/건강': 'health',
+  '건강': 'health',
   '기타': 'etc'
 };
 
@@ -171,4 +162,4 @@ export const ACCOUNT_TYPES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.424';
+export const APP_VERSION = '1.425';
