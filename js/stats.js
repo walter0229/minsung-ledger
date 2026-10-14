@@ -298,6 +298,48 @@ async function renderAnalysisCharts() {
   if (store.usageChart) store.usageChart.destroy();
   const ctx1 = document.getElementById('usageChart').getContext('2d');
   if(window.Chart) {
+    // 💡 지출 막대 위에 예산 사용률 % 표시 커스텀 플러그인
+    const usagePercentagePlugin = {
+      id: 'usagePercentage',
+      afterDatasetsDraw(chart) {
+        const { ctx, data } = chart;
+        const meta = chart.getDatasetMeta(1); // 1: 지출 막대
+        if (!meta || meta.hidden) return;
+
+        const budgetData = data.datasets[0]?.data || [];
+        const usedData = data.datasets[1]?.data || [];
+
+        ctx.save();
+        ctx.font = '600 11px Pretendard, system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+
+        meta.data.forEach((bar, index) => {
+          const b = Number(budgetData[index]) || 0;
+          const u = Number(usedData[index]) || 0;
+
+          let text = '';
+          let isOver = false;
+          if (b > 0) {
+            const pct = (u / b) * 100;
+            text = `${pct.toFixed(1)}%`;
+            isOver = pct > 100;
+          } else if (u > 0) {
+            text = '100%+';
+            isOver = true;
+          } else {
+            text = '0%';
+          }
+
+          ctx.fillStyle = isOver ? '#f87171' : '#34d399';
+          const x = bar.x;
+          const y = bar.y - 4;
+          ctx.fillText(text, x, y);
+        });
+        ctx.restore();
+      }
+    };
+
     store.usageChart = new window.Chart(ctx1, {
       type: 'bar',
       data: {
@@ -307,7 +349,40 @@ async function renderAnalysisCharts() {
           { label: '지출', data: used, backgroundColor: used.map((u, i) => u > budget[i] ? 'rgba(248,113,113,0.7)' : 'rgba(52,211,153,0.7)'), borderWidth: 0 }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9090b0', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } }, y: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } } } }
+      plugins: [usagePercentagePlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#9090b0', font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw || 0;
+                const formatted = Math.round(val).toLocaleString() + ' VND';
+                if (ctx.datasetIndex === 1) {
+                  const b = Number(budget[ctx.dataIndex]) || 0;
+                  const pctStr = b > 0 ? ` (${((val / b) * 100).toFixed(1)}%)` : (val > 0 ? ' (100%+)' : ' (0%)');
+                  return ` 지출: ${formatted}${pctStr}`;
+                }
+                return ` 예산: ${formatted}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } },
+          y: {
+            grace: '15%',
+            ticks: {
+              color: '#9090b0',
+              font: { size: 10 },
+              callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v.toLocaleString())
+            },
+            grid: { color: '#2e2e3e' }
+          }
+        }
+      }
     });
   }
 
@@ -364,14 +439,52 @@ async function renderAssetChart() {
   const ctx = document.getElementById('assetChart').getContext('2d');
 
   if(window.Chart) {
+    // 💡 자산현황 가로 막대 그래프 뒤(우측 끝)에 정확한 금액 숫자 표기 커스텀 플러그인
+    const assetValueDisplayPlugin = {
+      id: 'assetValueDisplay',
+      afterDatasetsDraw(chart) {
+        const { ctx, data } = chart;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || meta.hidden) return;
+
+        ctx.save();
+        ctx.font = '600 11px Pretendard, system-ui, -apple-system, sans-serif';
+        ctx.textBaseline = 'middle';
+
+        meta.data.forEach((bar, index) => {
+          const val = Number(data.datasets[0].data[index]) || 0;
+          const text = `${Math.round(val).toLocaleString()} VND`;
+
+          if (val >= 0) {
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#cbd5e1';
+            const posX = Math.max(bar.x, bar.base || 0) + 6;
+            ctx.fillText(text, posX, bar.y);
+          } else {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#f87171';
+            const posX = Math.min(bar.x, bar.base || 0) - 6;
+            ctx.fillText(text, posX, bar.y);
+          }
+        });
+        ctx.restore();
+      }
+    };
+
     store.assetChart = new window.Chart(ctx, {
       type: 'bar',
       data: {
         labels,
         datasets: [{ label: '자산 (VND 환산)', data, backgroundColor: bgColors }]
       },
+      plugins: [assetValueDisplayPlugin],
       options: {
         indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+          padding: { right: 80 }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -381,7 +494,11 @@ async function renderAssetChart() {
           }
         },
         scales: {
-          x: { ticks: { color: '#5a5a78', callback: v => (v/1000000).toFixed(1) + 'M' }, grid: { color: '#2e2e3e' } },
+          x: {
+            grace: '15%',
+            ticks: { color: '#5a5a78', callback: v => (v/1000000).toFixed(1) + 'M' },
+            grid: { color: '#2e2e3e' }
+          },
           y: { ticks: { color: '#9090b0' }, grid: { display: false } }
         }
       }
