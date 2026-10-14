@@ -1,12 +1,17 @@
 import { CATEGORIES } from './config.js';
 import { db } from './db.js';
-import { state, getCurrencySymbol, formatNumberInput, toast, showLoading } from './utils.js';
+import { state, getCurrencySymbol, formatNumberInput, toast, showLoading, getEffectiveBudgets } from './utils.js';
 import { openModal, closeModal } from './ui.js';
 
+// =============================================
+// 민성이의 가계부 - 예산 설정 (소분류 지원 & 자동 동기화)
+// =============================================
 
-// =============================================
-// 민성이의 가계부 - 예산 설정 (소분류 지원)
-// =============================================
+export function getNextMonth(ymStr) {
+  const [y, m] = (ymStr || '').replace(/\./g, '-').split('-').map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export function openBudgetModal() {
   document.getElementById('budgetMonth').value = state.currentMonth;
@@ -17,8 +22,9 @@ export function openBudgetModal() {
 export function renderBudgetInputList() {
   const el = document.getElementById('budgetInputList');
   const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
-  const ym = (rawYm || '').replace(/\./g, '-'); // 🚀 날짜 포맷 강제 표준화
-  const existing = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
+  const ym = (rawYm || '').replace(/\./g, '-');
+  // 해당 월에 예산이 없으면 가장 최근 설정된 월의 예산을 승계하여 프리뷰
+  const existing = getEffectiveBudgets(ym);
   const defaultCur = state.accounts[0]?.currency || 'VND';
   const sym = getCurrencySymbol(defaultCur);
 
@@ -26,18 +32,19 @@ export function renderBudgetInputList() {
   for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
     // 소분류 합계 계산
     const subs = existing.filter(e => e.category === mainCat && e.subCategory);
-    const subTotal = subs.reduce((s, b) => s + Number(b.amount), 0);
+    const subTotal = subs.reduce((s, b) => s + Number(b.amount || 0), 0);
     
-    // 대분류 예산 (직접 입력한 값이 있으면 우선, 없으면 소분류 합계 프리뷰)
+    // 소분류가 있으면 소분류 합계가 대분류 금액으로 고정, 없으면 직접 입력값
+    const hasSubCats = subCats && subCats.length > 0;
     const mainRecord = existing.find(e => e.category === mainCat && !e.subCategory);
-    const mainVal = mainRecord ? Number(mainRecord.amount).toLocaleString() : subTotal > 0 ? subTotal.toLocaleString() : '';
+    const mainVal = hasSubCats ? (subTotal > 0 ? subTotal.toLocaleString() : '0') : (mainRecord ? Number(mainRecord.amount).toLocaleString() : '');
 
     html += `<div class="budget-main-group" data-category="${mainCat}" style="margin-bottom:12px; border:1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden;">`;
     html += `  <div style="background:var(--bg3); padding:8px 12px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
-                 <span style="font-size:14px;">${mainCat} <small style="font-weight:normal; color:var(--text2); font-size:11px;">(계산된 합계)</small></span> 
+                 <span style="font-size:14px;">${mainCat} <small style="font-weight:normal; color:#a78bfa; font-size:11px;">${hasSubCats ? '(소분류 합계 자동반영)' : '(직접 입력)'}</small></span> 
                  <div class="amount-input-wrap" style="width: 130px;">
                     <span class="amount-symbol" style="font-size:11px;">${sym}</span>
-                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" placeholder="직접 입력 시 우선" oninput="window.formatNumberInput(this)" style="padding-left:24px; height:28px; font-size:13px; text-align:right;">
+                    <input type="text" inputmode="numeric" class="form-input" id="budget-${mainCat}-main" value="${mainVal}" ${hasSubCats ? 'readonly' : ''} oninput="window.formatNumberInput(this)" style="padding-left:24px; height:28px; font-size:13px; text-align:right; ${hasSubCats ? 'background:rgba(255,255,255,0.05); color:var(--text2); cursor:not-allowed;' : ''}">
                  </div>
                </div>`;
     html += `  <div style="padding:8px 12px; background:var(--card); display:flex; flex-direction:column; gap:6px;">`;
@@ -63,7 +70,7 @@ export function renderBudgetInputList() {
   el.innerHTML = html;
 }
 
-// 소분류 입력 시 실시간으로 대분류 합계 칸 업데이트
+// 소분류 입력 시 실시간으로 대분류 합계 칸 업데이트 (소분류 합계로 강제 동기화)
 export function updateCategoryTotal(mainCat) {
   const group = document.querySelector(`.budget-main-group[data-category="${mainCat}"]`);
   if (!group) return;
@@ -75,7 +82,7 @@ export function updateCategoryTotal(mainCat) {
   });
   const mainInp = document.getElementById(`budget-${mainCat}-main`);
   if (mainInp) {
-    mainInp.value = total > 0 ? total.toLocaleString() : '';
+    mainInp.value = total > 0 ? total.toLocaleString() : '0';
     mainInp.dataset.raw = total;
   }
 }
@@ -83,34 +90,52 @@ export function updateCategoryTotal(mainCat) {
 export async function saveBudgets() {
   const rawYm = document.getElementById('budgetMonth').value || state.currentMonth;
   const ym = (rawYm || '').replace(/\./g, '-');
+  const nextYm = getNextMonth(ym);
   
-  showLoading(true, '예산 저장 중...');
+  showLoading(true, '예산 저장 및 다음 달 자동 반영 중...');
   try {
-    // 🚀 전체 목록을 먼저 딱 한 번만 가져옴
     const existingList = await db.getBudgets();
     
-    for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
-      // 대분류 전체 예산 저장
-      const mainInp = document.getElementById(`budget-${mainCat}-main`);
-      if (mainInp) {
-        const raw = (mainInp.dataset.raw || mainInp.value || '0').replace(/,/g, '');
-        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: null }, existingList);
-        updateLocalBudgetStore(saved);
-      }
+    // 현재 월과 다음 달 둘 다에 예산 동일 반영
+    const targetMonths = [ym, nextYm];
 
-      // 소분류 개별 예산 저장
-      for (const sub of subCats) {
-        const inp = document.getElementById(`budget-${mainCat}-sub-${sub.id}`);
-        if (!inp) continue;
-        const raw = (inp.dataset.raw || inp.value || '0').replace(/,/g, '');
-        const saved = await db.saveBudget({ category: mainCat, amount: Number(raw)||0, yearMonth: ym, subCategory: sub.name }, existingList);
-        updateLocalBudgetStore(saved);
+    for (const targetMonth of targetMonths) {
+      for (const [mainCat, subCats] of Object.entries(CATEGORIES)) {
+        // 소분류 합계 계산
+        let subTotal = 0;
+        const subData = [];
+        for (const sub of subCats) {
+          const inp = document.getElementById(`budget-${mainCat}-sub-${sub.id}`);
+          const raw = inp ? (inp.dataset.raw || inp.value || '0').replace(/,/g, '') : '0';
+          const amt = Number(raw) || 0;
+          subTotal += amt;
+          subData.push({ subName: sub.name, amount: amt });
+        }
+
+        // 대분류 저장 (소분류가 있으면 소분류 합계로 100% 강제 일치)
+        const hasSubCats = subCats && subCats.length > 0;
+        let mainAmt = subTotal;
+        if (!hasSubCats) {
+          const mainInp = document.getElementById(`budget-${mainCat}-main`);
+          const rawMain = mainInp ? (mainInp.dataset.raw || mainInp.value || '0').replace(/,/g, '') : '0';
+          mainAmt = Number(rawMain) || 0;
+        }
+
+        const savedMain = await db.saveBudget({ category: mainCat, amount: mainAmt, yearMonth: targetMonth, subCategory: null }, existingList);
+        updateLocalBudgetStore(savedMain);
+
+        // 소분류 개별 저장
+        for (const s of subData) {
+          const savedSub = await db.saveBudget({ category: mainCat, amount: s.amount, yearMonth: targetMonth, subCategory: s.subName }, existingList);
+          updateLocalBudgetStore(savedSub);
+        }
       }
     }
     
-    toast('✅ 모든 예산이 안전하게 저장됐어요!');
+    toast(`✅ 예산이 저장되었으며, 다음 달(${nextYm})에도 자동 반영됐어요!`);
     if(window.closeModal) window.closeModal('budgetModal');
     if(typeof window.renderStats === 'function') window.renderStats();
+    if(typeof window.renderCalendar === 'function') window.renderCalendar();
   } catch(e) { 
     console.error('예산 저장 최종 실패:', e);
     toast('❌ 저장 실패: ' + (e.message || '알 수 없는 오류'), 'error'); 

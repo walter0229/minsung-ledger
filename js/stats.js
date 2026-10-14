@@ -1,4 +1,4 @@
-import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini, findAccount, calcBalance } from './utils.js';
+import { state, fmtMoney, fmtDate, getCategoryStats, getBudgetStatus, getTimeProgress, getDaysInMonth, callGemini, findAccount, calcBalance, getEffectiveBudgets } from './utils.js';
 import { store } from './store.js';
 import { ICONS } from './config.js';
 import { renderTxItem } from './transactions.js';
@@ -478,9 +478,10 @@ export async function renderCalendarScreen() {
   const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
   const baseCur = 'VND';
 
-  // 1. 해당 월 총 예산 합계 (VND)
-  const monthBudgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
-  const totalBudget = monthBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+  // 1. 해당 월 총 예산 합계 (VND, 소분류 없는 대분류 항목만 필터링하여 이중 합산 방지 & 익월 자동 승계)
+  const effectiveBudgets = getEffectiveBudgets(ym);
+  const mainBudgets = effectiveBudgets.filter(b => !b.subCategory || b.subCategory === '');
+  const totalBudget = mainBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
 
   // 2. 해당 월 거래 필터링 및 날짜별 지출 사전 계산
   const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(ym));

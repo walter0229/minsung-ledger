@@ -158,11 +158,28 @@ export function getMonthSummary(yearMonth) {
   return { income, expense, balance: income - expense, txs };
 }
 
+// ── 특정 월의 유효 예산 조회 (해당 월이 없으면 가장 최근 설정 월 자동 승계) ──
+export function getEffectiveBudgets(yearMonth) {
+  const ym = (yearMonth || '').replace(/\./g, '-');
+  const monthBudgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
+  if (monthBudgets.length > 0) return monthBudgets;
+
+  // 해당 월의 예산이 전혀 없으면, 가장 최근에 등록된 월의 예산을 자동 승계
+  const allYm = Array.from(new Set(state.budgets.map(b => (b.yearMonth || '').replace(/\./g, '-')))).sort();
+  if (allYm.length === 0) return [];
+
+  const prevYms = allYm.filter(y => y <= ym);
+  const targetYm = prevYms.length > 0 ? prevYms[prevYms.length - 1] : allYm[allYm.length - 1];
+
+  const sourceBudgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === targetYm);
+  return sourceBudgets.map(b => ({ ...b, yearMonth: ym, _inheritedFrom: targetYm }));
+}
+
 // ── 예산 대비 사용 ─────────────────────────
 export function getBudgetStatus(yearMonth, period = 'monthly') {
   const month = (yearMonth || '').replace(/\./g, '-');
   const [y, m] = month.split('-').map(Number);
-  const budgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === month);
+  const budgets = getEffectiveBudgets(month);
   
   let txs = [];
   let multiplier = 1;
