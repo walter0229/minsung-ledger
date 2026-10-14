@@ -178,7 +178,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.428';
+const APP_VERSION = '1.429';
 
 
 // =============================================
@@ -2976,13 +2976,13 @@ async function renderBalanceTrendChart() {
 }
 
 // ─────────────────────────────────────────────
-// 달력 렌더링
+// 달력 렌더링 (오늘 예산 / 오늘 지출 / 예산 잔액)
 // ─────────────────────────────────────────────
 async function renderCalendarScreen() {
   const d = state.calendarDate;
   const year = d.getFullYear(), month = d.getMonth();
   const calTitle = document.getElementById('calTitle');
-  if(!calTitle) return;
+  if (!calTitle) return;
   calTitle.textContent = `${year}년 ${month + 1}월`;
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -2991,45 +2991,91 @@ async function renderCalendarScreen() {
   const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
   const baseCur = 'VND';
 
+  // 1. 해당 월 총 예산 합계 (VND)
+  const monthBudgets = state.budgets.filter(b => (b.yearMonth || '').replace(/\./g, '-') === ym);
+  const totalBudget = monthBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+
+  // 2. 해당 월 거래 필터링 및 날짜별 지출 사전 계산
   const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(ym));
+  const dailyExpMap = {};
+  for (let day = 1; day <= daysInMonth; day++) dailyExpMap[day] = 0;
+
+  for (const t of txs) {
+    if (t.type === 'expense') {
+      const day = parseInt((t.date || '').slice(8, 10), 10);
+      if (day >= 1 && day <= daysInMonth) {
+        const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
+        const cur = acc?.currency || 'VND';
+        const conv = await convertCurrency(Number(t.amount) || 0, cur, baseCur);
+        dailyExpMap[day] = (dailyExpMap[day] || 0) + conv;
+      }
+    }
+  }
+
+  // 3. 월 총 지출 및 전체 잔여 예산 계산
+  const totalExpMonth = Object.values(dailyExpMap).reduce((a, b) => a + b, 0);
+  const currentRemainingBudget = totalBudget - totalExpMonth;
+
+  // 4. 상단 요약 배너 업데이트
+  const summaryCard = document.getElementById('calSummaryCard');
+  if (summaryCard) {
+    summaryCard.innerHTML = `
+      <div class="cal-sum-item">
+        <span class="cal-sum-label">이달 총예산</span>
+        <span class="cal-sum-val budget">${fmtMoney(totalBudget, 'VND')}</span>
+      </div>
+      <div class="cal-sum-item">
+        <span class="cal-sum-label">이달 총지출</span>
+        <span class="cal-sum-val exp">${fmtMoney(totalExpMonth, 'VND')}</span>
+      </div>
+      <div class="cal-sum-item">
+        <span class="cal-sum-label">현재 잔여예산</span>
+        <span class="cal-sum-val ${currentRemainingBudget >= 0 ? 'rem' : 'neg'}">${fmtMoney(currentRemainingBudget, 'VND')}</span>
+      </div>
+    `;
+  }
+
+  // 5. 달력 그리드 HTML 생성
   const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
   let html = dayLabels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
 
-  let monthlyCumulativeNet = 0;
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
+
+  let cumulativeExpBefore = 0; // 1일부터 d-1일까지 누적 지출
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
-    const dayTxs = txs.filter(t => (t.date || '').replace(/\./g, '-').slice(0, 10) === dateStr);
-    
-    let dayInc = 0, dayExp = 0;
-    for (const t of dayTxs) {
-      const acc = state.accounts.find(a => a.$id === (t.accountId || t.fromAccountId));
-      const cur = acc?.currency || 'VND';
-      const conv = await convertCurrency(Number(t.amount), cur, baseCur);
-      if (t.type === 'income') dayInc += conv;
-      if (t.type === 'expense') dayExp += conv;
-    }
-    const dayNet = dayInc - dayExp;
-    monthlyCumulativeNet += dayNet;
+    const dayExp = Math.round(dailyExpMap[day] || 0);
+    const remDays = daysInMonth - day + 1; // 오늘 포함 남은 일수
+
+    // 1행: 오늘 예산 = (전체 예산 - 어제까지의 누적 지출) / 남은 일수
+    const remBudgetAtStart = totalBudget - cumulativeExpBefore;
+    let todayBudget = remDays > 0 ? Math.round(remBudgetAtStart / remDays) : 0;
+
+    // 3행: 예산 잔액 = 전체 예산 - 오늘까지의 누적 지출
+    const cumulativeExpToday = cumulativeExpBefore + dayExp;
+    const remBudgetAtEnd = totalBudget - cumulativeExpToday;
+
+    // 다음 날을 위해 누적 지출 갱신
+    cumulativeExpBefore = cumulativeExpToday;
+
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
 
-    const fInc = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
-    const fExp = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
-    const fNet = (v) => Math.round(v).toLocaleString();
+    // 셀 내 텍스트 포맷 (콤마 형식)
+    const fNum = (v) => Math.round(v).toLocaleString();
 
-    html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}')">
+    html += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="window.showCalDetail('${dateStr}', ${todayBudget}, ${dayExp}, ${remBudgetAtEnd})">
       <div class="cal-num">${day}</div>
       <div class="cal-daily-stats">
-        ${dayInc > 0 ? `<div class="cal-inc-txt">${fInc(dayInc)}</div>` : ''}
-        ${dayExp > 0 ? `<div class="cal-exp-txt">${fExp(dayExp)}</div>` : ''}
-        <div class="cal-net-txt ${monthlyCumulativeNet > 0 ? 'pos' : monthlyCumulativeNet < 0 ? 'neg' : ''}">${fNet(monthlyCumulativeNet)}</div>
+        <div class="cal-budget-line" title="오늘 예산: ${fNum(todayBudget)}">${fNum(todayBudget)}</div>
+        <div class="cal-exp-line" title="오늘 지출: ${fNum(dayExp)}">${dayExp > 0 ? ('-' + fNum(dayExp)) : '-'}</div>
+        <div class="cal-rem-line ${remBudgetAtEnd < 0 ? 'neg' : ''}" title="예산 잔액: ${fNum(remBudgetAtEnd)}">${fNum(remBudgetAtEnd)}</div>
       </div>
     </div>`;
   }
 
   const calGrid = document.getElementById('calGrid');
-  if(calGrid) calGrid.innerHTML = html;
+  if (calGrid) calGrid.innerHTML = html;
 }
 
 function calPrevMonth() {
@@ -3037,23 +3083,42 @@ function calPrevMonth() {
   state.calendarDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
   renderCalendarScreen();
 }
+
 function calNextMonth() {
   const d = state.calendarDate;
   state.calendarDate = new Date(d.getFullYear(), d.getMonth() + 1, 1);
   renderCalendarScreen();
 }
 
-function showCalDetail(dateStr) {
+function showCalDetail(dateStr, todayBudget = 0, dayExp = 0, remBudget = 0) {
   const detailEl = document.getElementById('calDetail');
-  if(!detailEl) return;
+  if (!detailEl) return;
   const txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').slice(0, 10) === dateStr);
   detailEl.style.display = 'block';
+
+  let summaryHtml = `
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; background:var(--bg2); padding:10px; border-radius:8px; margin-bottom:12px; text-align:center;">
+      <div>
+        <div style="font-size:10px; color:var(--text3);">오늘 예산</div>
+        <div style="font-size:13px; font-weight:800; color:#a78bfa;">${fmtMoney(todayBudget, 'VND')}</div>
+      </div>
+      <div>
+        <div style="font-size:10px; color:var(--text3);">오늘 지출</div>
+        <div style="font-size:13px; font-weight:800; color:#f87171;">${fmtMoney(dayExp, 'VND')}</div>
+      </div>
+      <div>
+        <div style="font-size:10px; color:var(--text3);">예산 잔액</div>
+        <div style="font-size:13px; font-weight:800; color:${remBudget >= 0 ? '#34d399' : '#ef4444'};">${fmtMoney(remBudget, 'VND')}</div>
+      </div>
+    </div>
+  `;
+
   if (!txs.length) {
-    detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div><div class="cal-detail-empty">이날 거래 내역이 없습니다</div>`;
+    detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${summaryHtml}<div class="cal-detail-empty">이날 거래 내역이 없습니다</div>`;
     return;
   }
   const items = txs.map(t => renderTxItem(t)).join('');
-  detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${items}`;
+  detailEl.innerHTML = `<div class="cal-detail-date">${fmtDate(dateStr)}</div>${summaryHtml}${items}`;
 }
 
 // 윈도우 전역 함수 등록
@@ -3066,6 +3131,7 @@ window.showCalDetail = showCalDetail;
 window.setStatsPeriod = setStatsPeriod;
 window.setStatsType = setStatsType;
 window.setReportPeriod = setReportPeriod;
+window.renderCalendar = renderCalendarScreen;
 window.renderCalendarScreen = renderCalendarScreen;
 
 
