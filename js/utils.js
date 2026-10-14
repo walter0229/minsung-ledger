@@ -177,7 +177,7 @@ export function getBudgetStatus(yearMonth, period = 'monthly') {
     txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
   }
   
-  return budgets.map(b => {
+  const list = budgets.map(b => {
     let usedInVnd = 0;
     const isSub = b.subCategory && b.subCategory !== "";
     const monthlyBudget = Number(b.amount || 0);
@@ -209,6 +209,35 @@ export function getBudgetStatus(yearMonth, period = 'monthly') {
       used: usedInVnd, 
       percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
     };
+  });
+
+  // 🚀 대분류 및 소분류 순서대로 완벽 정렬 (Grouping)
+  const mainOrder = Object.keys(CATEGORIES);
+  return list.sort((a, b) => {
+    const aMainIdx = mainOrder.indexOf(a.category);
+    const bMainIdx = mainOrder.indexOf(b.category);
+    const aM = aMainIdx === -1 ? 999 : aMainIdx;
+    const bM = bMainIdx === -1 ? 999 : bMainIdx;
+
+    if (aM !== bM) return aM - bM;
+
+    // 대분류 합계(subCategory 없음)가 소분류보다 항상 앞섬
+    const aIsSub = Boolean(a.subCategory && a.subCategory !== '');
+    const bIsSub = Boolean(b.subCategory && b.subCategory !== '');
+    if (!aIsSub && bIsSub) return -1;
+    if (aIsSub && !bIsSub) return 1;
+
+    // 소분류끼리는 CATEGORIES[대분류]에 정의된 순서대로 정렬
+    if (aIsSub && bIsSub && CATEGORIES[a.category]) {
+      const subList = CATEGORIES[a.category].map(s => s.name);
+      const aSubIdx = subList.indexOf(a.subCategory);
+      const bSubIdx = subList.indexOf(b.subCategory);
+      const aS = aSubIdx === -1 ? 999 : aSubIdx;
+      const bS = bSubIdx === -1 ? 999 : bSubIdx;
+      if (aS !== bS) return aS - bS;
+    }
+
+    return 0;
   });
 }
 

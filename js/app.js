@@ -168,7 +168,7 @@ const ACCOUNT_TYPES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.425';
+const APP_VERSION = '1.426';
 
 
 // =============================================
@@ -381,7 +381,7 @@ function getBudgetStatus(yearMonth, period = 'monthly') {
     txs = state.transactions.filter(t => (t.date || '').replace(/\./g, '-').startsWith(month) && t.type === 'expense');
   }
   
-  return budgets.map(b => {
+  const list = budgets.map(b => {
     let usedInVnd = 0;
     const isSub = b.subCategory && b.subCategory !== "";
     const monthlyBudget = Number(b.amount || 0);
@@ -413,6 +413,35 @@ function getBudgetStatus(yearMonth, period = 'monthly') {
       used: usedInVnd, 
       percent: periodBudget > 0 ? (usedInVnd / periodBudget * 100).toFixed(1) : 0 
     };
+  });
+
+  // 🚀 대분류 및 소분류 순서대로 완벽 정렬 (Grouping)
+  const mainOrder = Object.keys(CATEGORIES);
+  return list.sort((a, b) => {
+    const aMainIdx = mainOrder.indexOf(a.category);
+    const bMainIdx = mainOrder.indexOf(b.category);
+    const aM = aMainIdx === -1 ? 999 : aMainIdx;
+    const bM = bMainIdx === -1 ? 999 : bMainIdx;
+
+    if (aM !== bM) return aM - bM;
+
+    // 대분류 합계(subCategory 없음)가 소분류보다 항상 앞섬
+    const aIsSub = Boolean(a.subCategory && a.subCategory !== '');
+    const bIsSub = Boolean(b.subCategory && b.subCategory !== '');
+    if (!aIsSub && bIsSub) return -1;
+    if (aIsSub && !bIsSub) return 1;
+
+    // 소분류끼리는 CATEGORIES[대분류]에 정의된 순서대로 정렬
+    if (aIsSub && bIsSub && CATEGORIES[a.category]) {
+      const subList = CATEGORIES[a.category].map(s => s.name);
+      const aSubIdx = subList.indexOf(a.subCategory);
+      const bSubIdx = subList.indexOf(b.subCategory);
+      const aS = aSubIdx === -1 ? 999 : aSubIdx;
+      const bS = bSubIdx === -1 ? 999 : bSubIdx;
+      if (aS !== bS) return aS - bS;
+    }
+
+    return 0;
   });
 }
 
@@ -2343,17 +2372,19 @@ async function renderBudgetBars() {
     </span>
   </div>`;
 
-  el.innerHTML = summaryHtml + status.map(b => {
+  el.innerHTML = summaryHtml + status.map((b, idx) => {
+    const isSub = Boolean(b.subCategory && b.subCategory !== "");
     const pct = Number(b.percent);
-    const title = (b.subCategory && b.subCategory !== "") ? `${b.category}(${b.subCategory})` : b.category;
-    // 시각적 구분을 위해 소분류는 살짝 들여쓰기
-    const paddingLeft = (b.subCategory && b.subCategory !== "") ? '16px' : '4px';
-    const fontSize = (b.subCategory && b.subCategory !== "") ? '10px' : '11px';
-    const color = (b.subCategory && b.subCategory !== "") ? 'var(--text3)' : 'var(--text)';
+    const title = isSub ? `${b.category}(${b.subCategory})` : b.category;
+    const paddingLeft = isSub ? '16px' : '4px';
+    const fontSize = isSub ? '10px' : '11px';
+    const color = isSub ? 'var(--text3)' : 'var(--text)';
+    const fontWeight = isSub ? '500' : '700';
+    const marginTop = (!isSub && idx > 0) ? 'margin-top:14px;' : '';
 
     return `
-    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:${paddingLeft};">
-      <span style="flex:0 0 130px; font-size:${fontSize}; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${color};">${title}</span>
+    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:${paddingLeft}; ${marginTop}">
+      <span style="flex:0 0 130px; font-size:${fontSize}; font-weight:${fontWeight}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${color};">${title}</span>
       <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
         <div class="progress-bar" style="width:${Math.min(pct, 100)}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
       </div>

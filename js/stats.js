@@ -146,17 +146,19 @@ async function renderBudgetBars() {
     </span>
   </div>`;
 
-  el.innerHTML = summaryHtml + status.map(b => {
+  el.innerHTML = summaryHtml + status.map((b, idx) => {
+    const isSub = Boolean(b.subCategory && b.subCategory !== "");
     const pct = Number(b.percent);
-    const title = (b.subCategory && b.subCategory !== "") ? `${b.category}(${b.subCategory})` : b.category;
-    // 시각적 구분을 위해 소분류는 살짝 들여쓰기
-    const paddingLeft = (b.subCategory && b.subCategory !== "") ? '16px' : '4px';
-    const fontSize = (b.subCategory && b.subCategory !== "") ? '10px' : '11px';
-    const color = (b.subCategory && b.subCategory !== "") ? 'var(--text3)' : 'var(--text)';
+    const title = isSub ? `${b.category}(${b.subCategory})` : b.category;
+    const paddingLeft = isSub ? '16px' : '4px';
+    const fontSize = isSub ? '10px' : '11px';
+    const color = isSub ? 'var(--text3)' : 'var(--text)';
+    const fontWeight = isSub ? '500' : '700';
+    const marginTop = (!isSub && idx > 0) ? 'margin-top:14px;' : '';
 
     return `
-    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:${paddingLeft};">
-      <span style="flex:0 0 130px; font-size:${fontSize}; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${color};">${title}</span>
+    <div class="budget-item" style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-left:${paddingLeft}; ${marginTop}">
+      <span style="flex:0 0 130px; font-size:${fontSize}; font-weight:${fontWeight}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${color};">${title}</span>
       <div class="progress-bg" style="flex:1; height:8px; margin-bottom:0; background:var(--bg3); border-radius:4px; overflow:hidden; position:relative; margin-left:4px;">
         <div class="progress-bar" style="width:${Math.min(pct, 100)}%; height:100%; border-radius:4px; background:${pct > 90 ? 'var(--expense)' : 'var(--income)'}; transition: width 0.3s;"></div>
       </div>
