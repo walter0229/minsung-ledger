@@ -3693,11 +3693,17 @@ function renderBudgetAlerts() {
   const el = document.getElementById('budgetAlerts');
   if(!el) return;
   const status = window.getBudgetStatus ? window.getBudgetStatus(state.currentMonth) : [];
-  const over = status.filter(b => Number(b.percent) > 100);
+  // 💡 대분류를 제외하고, 실제 지출 내역(used > 0)이 있는 소분류 예산 초과(percent > 100) 항목만 표시
+  const over = status.filter(b => {
+    const isSub = Boolean(b.subCategory && b.subCategory.trim() !== '');
+    const hasHistory = Number(b.used || 0) > 0;
+    const isOver = Number(b.percent || 0) > 100;
+    return isSub && hasHistory && isOver;
+  });
   if (!over.length) { el.innerHTML = ''; return; }
   
   el.innerHTML = over.map(b => {
-    const title = b.subCategory ? `${b.category}(${b.subCategory})` : b.category;
+    const title = `${b.category}(${b.subCategory})`;
     return `<div class="budget-alert">⚠️ <strong>${title}</strong> 예산 초과! (${b.percent}% 사용)</div>`;
   }).join('');
 }
