@@ -413,33 +413,49 @@ async function renderAnalysisCharts() {
 
 
 async function renderAssetChart() {
-  // 현금 계좌 제외, 환율 VND 기준으로 환산
-  const accounts = state.accounts.filter(a => a.type !== 'cash' && a.type !== 'loan');
-  if (!accounts.length) return;
+  if (!state.accounts || !state.accounts.length) return;
 
-  const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa'];
+  const colors = ['#7c6af7','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#ec4899','#38bdf8'];
   const labels = [];
   const data = [];
+  const rawVndList = [];
   const bgColors = [];
 
-  for (let i = 0; i < accounts.length; i++) {
-    const a = accounts[i];
+  for (const a of state.accounts) {
     // 초기잔액 + 거래내역 반영 실제 잔액
     const rawBal = (Number(a.initialBalance) || 0) + calcBalance(a.$id);
     // VND로 환산
     const inVND = await convertCurrency(rawBal, a.currency || 'VND', 'VND');
     const finalVal = a.type === 'loan' ? -Math.abs(inVND) : inVND;
 
-    labels.push(`${a.name}${a.currency !== 'VND' ? ` (${a.currency})` : ''}`);
-    data.push(Math.round(finalVal));
-    bgColors.push(a.type === 'loan' ? 'rgba(248,113,113,0.7)' : colors[i % colors.length]);
+    // 💡 -(마이너스 잔액)인 통장은 빼고, +(플러스 잔액)인 것은 모두 포함
+    if (finalVal > 0) {
+      // 💡 만단위로 반올림 (예: 16723023 -> 1672)
+      const valInManDong = Math.round(finalVal / 10000);
+      if (valInManDong > 0) {
+        labels.push(`${a.name}${a.currency !== 'VND' ? ` (${a.currency})` : ''}`);
+        data.push(valInManDong);
+        rawVndList.push(Math.round(finalVal));
+        bgColors.push(colors[labels.length % colors.length]);
+      }
+    }
+  }
+
+  const canvas = document.getElementById('assetChart');
+  if (!canvas) return;
+
+  // 💡 그래프가 작게 나오는 문제 해결: 계좌 수에 따라 넉넉한 캔버스 높이 동적 설정
+  const chartWrap = canvas.parentElement;
+  if (chartWrap) {
+    const dynamicHeight = Math.max(220, labels.length * 38);
+    chartWrap.style.height = `${dynamicHeight}px`;
   }
 
   if (store.assetChart) store.assetChart.destroy();
-  const ctx = document.getElementById('assetChart').getContext('2d');
+  const ctx = canvas.getContext('2d');
 
   if(window.Chart) {
-    // 💡 자산현황 가로 막대 그래프 뒤(우측 끝)에 정확한 금액 숫자 표기 커스텀 플러그인
+    // 💡 자산현황 가로 막대 그래프 뒤(우측 끝)에 만단위 정확한 숫자 표기 커스텀 플러그인
     const assetValueDisplayPlugin = {
       id: 'assetValueDisplay',
       afterDatasetsDraw(chart) {
@@ -450,22 +466,14 @@ async function renderAssetChart() {
         ctx.save();
         ctx.font = '600 11px Pretendard, system-ui, -apple-system, sans-serif';
         ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#cbd5e1';
 
         meta.data.forEach((bar, index) => {
           const val = Number(data.datasets[0].data[index]) || 0;
-          const text = `${Math.round(val).toLocaleString()} VND`;
-
-          if (val >= 0) {
-            ctx.textAlign = 'left';
-            ctx.fillStyle = '#cbd5e1';
-            const posX = Math.max(bar.x, bar.base || 0) + 6;
-            ctx.fillText(text, posX, bar.y);
-          } else {
-            ctx.textAlign = 'right';
-            ctx.fillStyle = '#f87171';
-            const posX = Math.min(bar.x, bar.base || 0) - 6;
-            ctx.fillText(text, posX, bar.y);
-          }
+          const text = val.toLocaleString(); // 예: 1,672
+          const posX = Math.max(bar.x, bar.base || 0) + 6;
+          ctx.fillText(text, posX, bar.y);
         });
         ctx.restore();
       }
@@ -475,7 +483,7 @@ async function renderAssetChart() {
       type: 'bar',
       data: {
         labels,
-        datasets: [{ label: '자산 (VND 환산)', data, backgroundColor: bgColors }]
+        datasets: [{ label: '자산 (만동)', data, backgroundColor: bgColors }]
       },
       plugins: [assetValueDisplayPlugin],
       options: {
@@ -483,20 +491,28 @@ async function renderAssetChart() {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-          padding: { right: 80 }
+          padding: { right: 60 }
         },
         plugins: {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => ` ${Math.round(ctx.raw).toLocaleString()} VND`
+              label: ctx => {
+                const manDong = ctx.raw || 0;
+                const actualVND = rawVndList[ctx.dataIndex] || 0;
+                return ` ${manDong.toLocaleString()} 만동 (실제: ${actualVND.toLocaleString()} VND)`;
+              }
             }
           }
         },
         scales: {
           x: {
             grace: '15%',
-            ticks: { color: '#5a5a78', callback: v => (v/1000000).toFixed(1) + 'M' },
+            ticks: {
+              color: '#9090b0',
+              font: { size: 10 },
+              callback: v => v.toLocaleString()
+            },
             grid: { color: '#2e2e3e' }
           },
           y: { ticks: { color: '#9090b0' }, grid: { display: false } }
