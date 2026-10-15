@@ -59,6 +59,32 @@ export function getWeekNumber(d) {
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
+// ── 거래 정렬 (날짜는 최신순, 동일 날짜 내에서는 입력된 순서대로 하단 추가) ──
+export function sortTransactions(list) {
+  if (!list || !Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const dayA = (a.date || '').slice(0, 10);
+    const dayB = (b.date || '').slice(0, 10);
+    if (dayA !== dayB) {
+      return dayB.localeCompare(dayA); // 날짜는 최신순 (내림차순)
+    }
+    // 동일 날짜 내: 시간 오름차순 (먼저 등록된 거래가 상단, 나중에 등록된 거래가 하단)
+    const timeA = (a.date || '').slice(11) || '';
+    const timeB = (b.date || '').slice(11) || '';
+    if (timeA && timeB && timeA !== timeB) {
+      return timeA.localeCompare(timeB);
+    }
+    // 시간 정보가 같거나 없을 때는 생성시각($createdAt) 오름차순
+    const cA = a.$createdAt || '';
+    const cB = b.$createdAt || '';
+    if (cA && cB && cA !== cB) {
+      return cA.localeCompare(cB);
+    }
+    return 0;
+  });
+}
+window.sortTransactions = sortTransactions;
+
 // ── 데이터 로딩 ────────────────────────────
 export async function loadAll() {
   // 🚀 1. 로컬 저장소(localStorage) 데이터 0.01초 즉시 로드 (먹통 방지)
@@ -70,7 +96,7 @@ export async function loadAll() {
 
     if (localAccs.length > 0 || localTxs.length > 0) {
       state.accounts = localAccs;
-      state.transactions = localTxs.sort((a,b) => new Date(b.date) - new Date(a.date));
+      state.transactions = sortTransactions(localTxs);
       state.budgets = localBuds;
       if (localSets) Object.assign(state.settings, localSets);
     }
@@ -100,7 +126,7 @@ export async function loadAll() {
       };
 
       if (accs && accs.length > 0) state.accounts = unique(accs);
-      if (txs && txs.length > 0) state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
+      if (txs && txs.length > 0) state.transactions = sortTransactions(unique(txs));
       
       if (buds && buds.length > 0) {
         const budgetMap = {};

@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading, calcBalance, parseTransferMeta } from './utils.js';
+import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading, calcBalance, parseTransferMeta, sortTransactions } from './utils.js';
 import { store } from './store.js';
 import { CATEGORIES, ICONS, MAIN_CAT_ICONS, INCOME_CATEGORIES } from './config.js';
 import { openModal, closeModal } from './ui.js';
@@ -384,8 +384,23 @@ export function highlightSelectedIcon() {
 }
 
 export async function saveTx() {
-  const date = document.getElementById('txDate').value;
-  if (!date) { toast('날짜를 선택해주세요', 'error'); return; }
+  const inputDate = document.getElementById('txDate').value;
+  if (!inputDate) { toast('날짜를 선택해주세요', 'error'); return; }
+
+  // 💡 동일 날짜 내 입력 순서 보존을 위해 현재 시간(HH:mm:ss) 자동 결합
+  let date = inputDate;
+  if (store.editingTxId) {
+    const orig = state.transactions.find(t => t.$id === store.editingTxId);
+    if (orig && (orig.date || '').startsWith(inputDate) && (orig.date || '').includes('T')) {
+      date = orig.date; // 수정 시 날짜가 동일하면 기존 시간 유지
+    } else {
+      const now = new Date();
+      date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    }
+  } else {
+    const now = new Date();
+    date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  }
 
   let data = { date, type: store.currentTxType };
 
@@ -480,9 +495,10 @@ export async function saveTx() {
       toast('✅ 수정됐어요!');
     } else {
       const saved = await db.createTransaction(data);
-      state.transactions.unshift(saved);
+      state.transactions.push(saved);
       toast('✅ 저장됐어요!');
     }
+    state.transactions = (window.sortTransactions || sortTransactions)(state.transactions);
     closeModal('addModal');
     if (window.renderHome) window.renderHome();
   } catch(e) {
@@ -753,17 +769,17 @@ function refreshUI(context) {
 }
 
 function getTxListForContext(context) {
+  const sortFn = window.sortTransactions || sortTransactions;
   if (context === 'home') {
-    return state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
-      .sort((a, b) => b.date.localeCompare(a.date));
+    return sortFn(state.transactions.filter(t => t.date?.startsWith(state.currentMonth)));
   } else {
     const accId = window.currentAccountHistoryId;
     if (!accId) return [];
-    return state.transactions.filter(t => 
+    return sortFn(state.transactions.filter(t => 
       t.accountId === accId || 
       t.fromAccountId === accId || 
       t.toAccountId === accId
-    ).sort((a, b) => b.date.localeCompare(a.date));
+    ));
   }
 }
 
@@ -777,18 +793,19 @@ function reassignGroupTimes(txs) {
 
   for (const d in groups) {
     const list = groups[d];
-    let hour = 23;
-    let min = 59;
+    let hour = 0;
+    let min = 0;
+    let sec = 1;
     for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
       const fullDate = `${d}T${newTimeStr}`;
       if (t.date !== fullDate) {
         t.date = fullDate;
         window.txReorderPendingChanges[t.$id] = fullDate;
       }
-      min--;
-      if (min < 0) { min = 59; hour--; }
-      if (hour < 0) hour = 0;
+      sec++;
+      if (sec >= 60) { sec = 0; min++; }
+      if (min >= 60) { min = 0; hour++; }
     }
   }
 }
@@ -997,29 +1014,7 @@ window.processTxDrop = function(sourceId, targetId, targetDate, context) {
     }
   }
 
-  const groups = {};
-  txs.forEach(t => {
-    const d = (t.date || '').slice(0, 10);
-    if (!groups[d]) groups[d] = [];
-    groups[d].push(t);
-  });
-
-  for (const d in groups) {
-    const list = groups[d];
-    let hour = 23;
-    let min = 59;
-    for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
-      const fullDate = `${d}T${newTimeStr}`;
-      if (t.date !== fullDate) {
-        t.date = fullDate;
-        window.txReorderPendingChanges[t.$id] = fullDate;
-      }
-      min--;
-      if (min < 0) { min = 59; hour--; }
-      if (hour < 0) hour = 0;
-    }
-  }
+  reassignGroupTimes(txs);
 
   if (context === 'home') {
     if (window.renderHome) window.renderHome();

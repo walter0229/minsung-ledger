@@ -1,4 +1,4 @@
-import { loadAll, state, fmtMoney, toast, showLoading, fmtDate, calcBalance, findAccount, convertCurrency, iconImg } from './utils.js';
+import { loadAll, state, fmtMoney, toast, showLoading, fmtDate, calcBalance, findAccount, convertCurrency, iconImg, sortTransactions } from './utils.js';
 import { db } from './db.js';
 import { ICONS, APP_VERSION } from './config.js';
 
@@ -166,8 +166,8 @@ window.renderAccountsList = renderAccountsList;
 export function renderTxList() {
   const el = document.getElementById('txList');
   if(!el) return;
-  const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const filtered = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  const txs = (window.sortTransactions || sortTransactions)(filtered);
 
   if (!txs.length) {
     el.innerHTML = '<div class="empty-state"><div class="icon">💸</div><p>이번달 거래 내역이 없습니다</p></div>';

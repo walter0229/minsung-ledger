@@ -273,6 +273,32 @@ function getWeekNumber(d) {
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
+// ── 거래 정렬 (날짜는 최신순, 동일 날짜 내에서는 입력된 순서대로 하단 추가) ──
+function sortTransactions(list) {
+  if (!list || !Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const dayA = (a.date || '').slice(0, 10);
+    const dayB = (b.date || '').slice(0, 10);
+    if (dayA !== dayB) {
+      return dayB.localeCompare(dayA); // 날짜는 최신순 (내림차순)
+    }
+    // 동일 날짜 내: 시간 오름차순 (먼저 등록된 거래가 상단, 나중에 등록된 거래가 하단)
+    const timeA = (a.date || '').slice(11) || '';
+    const timeB = (b.date || '').slice(11) || '';
+    if (timeA && timeB && timeA !== timeB) {
+      return timeA.localeCompare(timeB);
+    }
+    // 시간 정보가 같거나 없을 때는 생성시각($createdAt) 오름차순
+    const cA = a.$createdAt || '';
+    const cB = b.$createdAt || '';
+    if (cA && cB && cA !== cB) {
+      return cA.localeCompare(cB);
+    }
+    return 0;
+  });
+}
+window.sortTransactions = sortTransactions;
+
 // ── 데이터 로딩 ────────────────────────────
 async function loadAll() {
   // 🚀 1. 로컬 저장소(localStorage) 데이터 0.01초 즉시 로드 (먹통 방지)
@@ -284,7 +310,7 @@ async function loadAll() {
 
     if (localAccs.length > 0 || localTxs.length > 0) {
       state.accounts = localAccs;
-      state.transactions = localTxs.sort((a,b) => new Date(b.date) - new Date(a.date));
+      state.transactions = sortTransactions(localTxs);
       state.budgets = localBuds;
       if (localSets) Object.assign(state.settings, localSets);
     }
@@ -314,7 +340,7 @@ async function loadAll() {
       };
 
       if (accs && accs.length > 0) state.accounts = unique(accs);
-      if (txs && txs.length > 0) state.transactions = unique(txs).sort((a,b) => new Date(b.date) - new Date(a.date));
+      if (txs && txs.length > 0) state.transactions = sortTransactions(unique(txs));
       
       if (buds && buds.length > 0) {
         const budgetMap = {};
@@ -1915,8 +1941,23 @@ function highlightSelectedIcon() {
 }
 
 async function saveTx() {
-  const date = document.getElementById('txDate').value;
-  if (!date) { toast('날짜를 선택해주세요', 'error'); return; }
+  const inputDate = document.getElementById('txDate').value;
+  if (!inputDate) { toast('날짜를 선택해주세요', 'error'); return; }
+
+  // 💡 동일 날짜 내 입력 순서 보존을 위해 현재 시간(HH:mm:ss) 자동 결합
+  let date = inputDate;
+  if (store.editingTxId) {
+    const orig = state.transactions.find(t => t.$id === store.editingTxId);
+    if (orig && (orig.date || '').startsWith(inputDate) && (orig.date || '').includes('T')) {
+      date = orig.date; // 수정 시 날짜가 동일하면 기존 시간 유지
+    } else {
+      const now = new Date();
+      date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    }
+  } else {
+    const now = new Date();
+    date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  }
 
   let data = { date, type: store.currentTxType };
 
@@ -2011,9 +2052,10 @@ async function saveTx() {
       toast('✅ 수정됐어요!');
     } else {
       const saved = await db.createTransaction(data);
-      state.transactions.unshift(saved);
+      state.transactions.push(saved);
       toast('✅ 저장됐어요!');
     }
+    state.transactions = (window.sortTransactions || sortTransactions)(state.transactions);
     closeModal('addModal');
     if (window.renderHome) window.renderHome();
   } catch(e) {
@@ -2284,17 +2326,17 @@ function refreshUI(context) {
 }
 
 function getTxListForContext(context) {
+  const sortFn = window.sortTransactions || sortTransactions;
   if (context === 'home') {
-    return state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
-      .sort((a, b) => b.date.localeCompare(a.date));
+    return sortFn(state.transactions.filter(t => t.date?.startsWith(state.currentMonth)));
   } else {
     const accId = window.currentAccountHistoryId;
     if (!accId) return [];
-    return state.transactions.filter(t => 
+    return sortFn(state.transactions.filter(t => 
       t.accountId === accId || 
       t.fromAccountId === accId || 
       t.toAccountId === accId
-    ).sort((a, b) => b.date.localeCompare(a.date));
+    ));
   }
 }
 
@@ -2308,18 +2350,19 @@ function reassignGroupTimes(txs) {
 
   for (const d in groups) {
     const list = groups[d];
-    let hour = 23;
-    let min = 59;
+    let hour = 0;
+    let min = 0;
+    let sec = 1;
     for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
       const fullDate = `${d}T${newTimeStr}`;
       if (t.date !== fullDate) {
         t.date = fullDate;
         window.txReorderPendingChanges[t.$id] = fullDate;
       }
-      min--;
-      if (min < 0) { min = 59; hour--; }
-      if (hour < 0) hour = 0;
+      sec++;
+      if (sec >= 60) { sec = 0; min++; }
+      if (min >= 60) { min = 0; hour++; }
     }
   }
 }
@@ -2528,29 +2571,7 @@ window.processTxDrop = function(sourceId, targetId, targetDate, context) {
     }
   }
 
-  const groups = {};
-  txs.forEach(t => {
-    const d = (t.date || '').slice(0, 10);
-    if (!groups[d]) groups[d] = [];
-    groups[d].push(t);
-  });
-
-  for (const d in groups) {
-    const list = groups[d];
-    let hour = 23;
-    let min = 59;
-    for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
-      const fullDate = `${d}T${newTimeStr}`;
-      if (t.date !== fullDate) {
-        t.date = fullDate;
-        window.txReorderPendingChanges[t.$id] = fullDate;
-      }
-      min--;
-      if (min < 0) { min = 59; hour--; }
-      if (hour < 0) hour = 0;
-    }
-  }
+  reassignGroupTimes(txs);
 
   if (context === 'home') {
     if (window.renderHome) window.renderHome();
@@ -3649,8 +3670,8 @@ window.renderAccountsList = renderAccountsList;
 function renderTxList() {
   const el = document.getElementById('txList');
   if(!el) return;
-  const txs = state.transactions.filter(t => t.date?.startsWith(state.currentMonth))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const filtered = state.transactions.filter(t => t.date?.startsWith(state.currentMonth));
+  const txs = (window.sortTransactions || sortTransactions)(filtered);
 
   if (!txs.length) {
     el.innerHTML = '<div class="empty-state"><div class="icon">💸</div><p>이번달 거래 내역이 없습니다</p></div>';
