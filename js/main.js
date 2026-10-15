@@ -118,6 +118,8 @@ async function renderAccountsList() {
     return;
   }
 
+  const chartAccMap = state.settings?.assetChartAccounts || null;
+
   el.innerHTML = state.accounts.map(a => {
     let bal = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
     const isLoan = a.type === 'loan';
@@ -126,15 +128,40 @@ async function renderAccountsList() {
     const cur = a.currency || 'VND';
     const iconKey = a.bankIcon || a.currencyIcon || cur.toLowerCase();
     
+    // 💡 설정이 저장되어 있으면 그 값을 따르고, 아직 설정이 없으면 플러스 잔액 계좌 기본 체크
+    const isChecked = chartAccMap ? !!chartAccMap[a.$id] : (bal > 0);
+    
     return `<div class="account-card" onclick="window.openAccountHistory('${a.$id}')">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-        <img src="${ICONS[iconKey]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">
-        <span class="name">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <img src="${ICONS[iconKey]||''}" width="20" height="20" style="border-radius:4px;object-fit:contain;">
+          <span class="name" style="margin-bottom:0;">${a.name} ${isLoan ? '<small style="color:var(--text3); font-size:10px;">(대출)</small>' : ''}</span>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);font-size:11px;color:${isChecked ? 'var(--primary)' : 'var(--text3)'};user-select:none;" onclick="event.stopPropagation()" title="보고서 자산현황 그래프에 표시">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleAccountChartVisible('${a.$id}', this.checked)" style="cursor:pointer;accent-color:var(--primary);width:14px;height:14px;">
+          <span>표시</span>
+        </label>
       </div>
       <div class="bal ${bal >= 0 ? 'positive' : 'negative'}">${fmtMoney(bal, cur)}</div>
     </div>`;
   }).join('');
 }
+
+export function toggleAccountChartVisible(accId, isChecked) {
+  if (!state.settings) state.settings = {};
+  if (!state.settings.assetChartAccounts) {
+    state.settings.assetChartAccounts = {};
+    for (const a of state.accounts) {
+      const b = calcBalance(a.$id) + (Number(a.initialBalance) || 0);
+      state.settings.assetChartAccounts[a.$id] = (b > 0);
+    }
+  }
+  state.settings.assetChartAccounts[accId] = isChecked;
+  localStorage.setItem('ledger_app-settings', JSON.stringify(state.settings));
+  if (window.renderAccountsList) window.renderAccountsList();
+}
+window.toggleAccountChartVisible = toggleAccountChartVisible;
+window.renderAccountsList = renderAccountsList;
 
 export function renderTxList() {
   const el = document.getElementById('txList');

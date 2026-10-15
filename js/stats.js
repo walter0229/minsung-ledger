@@ -421,6 +421,8 @@ async function renderAssetChart() {
   const rawVndList = [];
   const bgColors = [];
 
+  const chartAccMap = state.settings?.assetChartAccounts || null;
+
   for (const a of state.accounts) {
     // 초기잔액 + 거래내역 반영 실제 잔액
     const rawBal = (Number(a.initialBalance) || 0) + calcBalance(a.$id);
@@ -428,8 +430,11 @@ async function renderAssetChart() {
     const inVND = await convertCurrency(rawBal, a.currency || 'VND', 'VND');
     const finalVal = a.type === 'loan' ? -Math.abs(inVND) : inVND;
 
-    // 💡 -(마이너스 잔액)인 통장은 빼고, +(플러스 잔액)인 것은 모두 포함
-    if (finalVal > 0) {
+    // 💡 계좌탭에서 체크박스가 체크되어 있는지 확인 (설정이 없으면 플러스 계좌 기본 표시)
+    const isChecked = chartAccMap ? !!chartAccMap[a.$id] : (finalVal > 0);
+
+    // 💡 체크가 되어 있고, -(마이너스 잔액)이 아닌 통장만 자산현황에 표시
+    if (isChecked && finalVal > 0) {
       // 💡 만단위로 반올림 (예: 16723023 -> 1672)
       const valInManDong = Math.round(finalVal / 10000);
       if (valInManDong > 0) {
