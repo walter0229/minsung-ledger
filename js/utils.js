@@ -59,28 +59,32 @@ export function getWeekNumber(d) {
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
-// ── 거래 정렬 (날짜는 최신순, 동일 날짜 내에서는 입력된 순서대로 하단 추가) ──
+// ── 거래 정렬 (날짜 최신순, 동일 날짜 내에서는 늦게 등록된 최신 거래가 상단) ──
 export function sortTransactions(list) {
   if (!list || !Array.isArray(list)) return [];
   return [...list].sort((a, b) => {
+    // 1. 날짜(YYYY-MM-DD) 내림차순 (최신 날짜가 위)
     const dayA = (a.date || '').slice(0, 10);
     const dayB = (b.date || '').slice(0, 10);
     if (dayA !== dayB) {
-      return dayB.localeCompare(dayA); // 날짜는 최신순 (내림차순)
+      return dayB.localeCompare(dayA);
     }
-    // 동일 날짜 내: 시간 오름차순 (먼저 등록된 거래가 상단, 나중에 등록된 거래가 하단)
-    const timeA = (a.date || '').slice(11) || '';
-    const timeB = (b.date || '').slice(11) || '';
-    if (timeA && timeB && timeA !== timeB) {
-      return timeA.localeCompare(timeB);
+    // 2. 동일 날짜 내: 둘 다 위치변경 시간(T...)이 부여되어 있다면 시간 내림차순 (23:59가 상단, 23:58이 하단)
+    const hasTimeA = (a.date || '').includes('T');
+    const hasTimeB = (b.date || '').includes('T');
+    if (hasTimeA && hasTimeB) {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
     }
-    // 시간 정보가 같거나 없을 때는 생성시각($createdAt) 오름차순
+    // 3. 신규 거래(생성시각 기준) 또는 시간 없는 거래: 늦게 입력한 최신 거래가 상단, 먼저 입력한 건 하단
     const cA = a.$createdAt || '';
     const cB = b.$createdAt || '';
     if (cA && cB && cA !== cB) {
-      return cA.localeCompare(cB);
+      return cB.localeCompare(cA);
     }
-    return 0;
+    // 4. 폴백: date 내림차순
+    return (b.date || '').localeCompare(a.date || '');
   });
 }
 window.sortTransactions = sortTransactions;

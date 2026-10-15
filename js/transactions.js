@@ -384,23 +384,8 @@ export function highlightSelectedIcon() {
 }
 
 export async function saveTx() {
-  const inputDate = document.getElementById('txDate').value;
-  if (!inputDate) { toast('날짜를 선택해주세요', 'error'); return; }
-
-  // 💡 동일 날짜 내 입력 순서 보존을 위해 현재 시간(HH:mm:ss) 자동 결합
-  let date = inputDate;
-  if (store.editingTxId) {
-    const orig = state.transactions.find(t => t.$id === store.editingTxId);
-    if (orig && (orig.date || '').startsWith(inputDate) && (orig.date || '').includes('T')) {
-      date = orig.date; // 수정 시 날짜가 동일하면 기존 시간 유지
-    } else {
-      const now = new Date();
-      date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-    }
-  } else {
-    const now = new Date();
-    date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-  }
+  const date = document.getElementById('txDate').value;
+  if (!date) { toast('날짜를 선택해주세요', 'error'); return; }
 
   let data = { date, type: store.currentTxType };
 
@@ -495,7 +480,7 @@ export async function saveTx() {
       toast('✅ 수정됐어요!');
     } else {
       const saved = await db.createTransaction(data);
-      state.transactions.push(saved);
+      state.transactions.unshift(saved);
       toast('✅ 저장됐어요!');
     }
     state.transactions = (window.sortTransactions || sortTransactions)(state.transactions);
@@ -793,19 +778,18 @@ function reassignGroupTimes(txs) {
 
   for (const d in groups) {
     const list = groups[d];
-    let hour = 0;
-    let min = 0;
-    let sec = 1;
+    let hour = 23;
+    let min = 59;
     for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
       const fullDate = `${d}T${newTimeStr}`;
       if (t.date !== fullDate) {
         t.date = fullDate;
         window.txReorderPendingChanges[t.$id] = fullDate;
       }
-      sec++;
-      if (sec >= 60) { sec = 0; min++; }
-      if (min >= 60) { min = 0; hour++; }
+      min--;
+      if (min < 0) { min = 59; hour--; }
+      if (hour < 0) hour = 0;
     }
   }
 }

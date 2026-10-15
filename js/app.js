@@ -273,28 +273,32 @@ function getWeekNumber(d) {
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
-// ── 거래 정렬 (날짜는 최신순, 동일 날짜 내에서는 입력된 순서대로 하단 추가) ──
+// ── 거래 정렬 (날짜 최신순, 동일 날짜 내에서는 늦게 등록된 최신 거래가 상단) ──
 function sortTransactions(list) {
   if (!list || !Array.isArray(list)) return [];
   return [...list].sort((a, b) => {
+    // 1. 날짜(YYYY-MM-DD) 내림차순 (최신 날짜가 위)
     const dayA = (a.date || '').slice(0, 10);
     const dayB = (b.date || '').slice(0, 10);
     if (dayA !== dayB) {
-      return dayB.localeCompare(dayA); // 날짜는 최신순 (내림차순)
+      return dayB.localeCompare(dayA);
     }
-    // 동일 날짜 내: 시간 오름차순 (먼저 등록된 거래가 상단, 나중에 등록된 거래가 하단)
-    const timeA = (a.date || '').slice(11) || '';
-    const timeB = (b.date || '').slice(11) || '';
-    if (timeA && timeB && timeA !== timeB) {
-      return timeA.localeCompare(timeB);
+    // 2. 동일 날짜 내: 둘 다 위치변경 시간(T...)이 부여되어 있다면 시간 내림차순 (23:59가 상단, 23:58이 하단)
+    const hasTimeA = (a.date || '').includes('T');
+    const hasTimeB = (b.date || '').includes('T');
+    if (hasTimeA && hasTimeB) {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
     }
-    // 시간 정보가 같거나 없을 때는 생성시각($createdAt) 오름차순
+    // 3. 신규 거래(생성시각 기준) 또는 시간 없는 거래: 늦게 입력한 최신 거래가 상단, 먼저 입력한 건 하단
     const cA = a.$createdAt || '';
     const cB = b.$createdAt || '';
     if (cA && cB && cA !== cB) {
-      return cA.localeCompare(cB);
+      return cB.localeCompare(cA);
     }
-    return 0;
+    // 4. 폴백: date 내림차순
+    return (b.date || '').localeCompare(a.date || '');
   });
 }
 window.sortTransactions = sortTransactions;
@@ -1941,23 +1945,8 @@ function highlightSelectedIcon() {
 }
 
 async function saveTx() {
-  const inputDate = document.getElementById('txDate').value;
-  if (!inputDate) { toast('날짜를 선택해주세요', 'error'); return; }
-
-  // 💡 동일 날짜 내 입력 순서 보존을 위해 현재 시간(HH:mm:ss) 자동 결합
-  let date = inputDate;
-  if (store.editingTxId) {
-    const orig = state.transactions.find(t => t.$id === store.editingTxId);
-    if (orig && (orig.date || '').startsWith(inputDate) && (orig.date || '').includes('T')) {
-      date = orig.date; // 수정 시 날짜가 동일하면 기존 시간 유지
-    } else {
-      const now = new Date();
-      date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-    }
-  } else {
-    const now = new Date();
-    date = `${inputDate}T${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-  }
+  const date = document.getElementById('txDate').value;
+  if (!date) { toast('날짜를 선택해주세요', 'error'); return; }
 
   let data = { date, type: store.currentTxType };
 
@@ -2052,7 +2041,7 @@ async function saveTx() {
       toast('✅ 수정됐어요!');
     } else {
       const saved = await db.createTransaction(data);
-      state.transactions.push(saved);
+      state.transactions.unshift(saved);
       toast('✅ 저장됐어요!');
     }
     state.transactions = (window.sortTransactions || sortTransactions)(state.transactions);
@@ -2350,19 +2339,18 @@ function reassignGroupTimes(txs) {
 
   for (const d in groups) {
     const list = groups[d];
-    let hour = 0;
-    let min = 0;
-    let sec = 1;
+    let hour = 23;
+    let min = 59;
     for (const t of list) {
-      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+      const newTimeStr = `${hour.toString().padStart(2,'0')}:${min.toString().padStart(2,'0')}:00`;
       const fullDate = `${d}T${newTimeStr}`;
       if (t.date !== fullDate) {
         t.date = fullDate;
         window.txReorderPendingChanges[t.$id] = fullDate;
       }
-      sec++;
-      if (sec >= 60) { sec = 0; min++; }
-      if (min >= 60) { min = 0; hour++; }
+      min--;
+      if (min < 0) { min = 59; hour--; }
+      if (hour < 0) hour = 0;
     }
   }
 }
