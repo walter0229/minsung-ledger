@@ -178,7 +178,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.434';
+const APP_VERSION = '1.435';
 
 
 // =============================================
@@ -339,6 +339,31 @@ async function loadAll() {
   })();
 }
 
+// ── 이체 환율/입금액 메타데이터 파서 (하위 호환 및 50자 제한 완벽 대응) ────
+function parseTransferMeta(t) {
+  if (!t || t.type !== 'transfer' || !t.subCategory || typeof t.subCategory !== 'string' || !t.subCategory.startsWith('{')) {
+    return null;
+  }
+  try {
+    const raw = JSON.parse(t.subCategory);
+    if (!raw || typeof raw !== 'object') return null;
+
+    const fromAcc = findAccount(t.fromAccountId);
+    const toAcc = findAccount(t.toAccountId);
+
+    const rate = Number(raw.rate !== undefined ? raw.rate : raw.r);
+    const toAmount = Number(raw.toAmount !== undefined ? raw.toAmount : raw.a);
+    const fromCur = raw.fromCur || fromAcc?.currency || 'VND';
+    const toCur = raw.toCur || toAcc?.currency || 'VND';
+
+    if (isNaN(rate) || isNaN(toAmount)) return null;
+
+    return { rate, toAmount, fromCur, toCur };
+  } catch (e) {
+    return null;
+  }
+}
+
 // ── 계좌 잔액 계산 ─────────────────────────
 function calcBalance(accountId) {
   let bal = 0;
@@ -349,13 +374,9 @@ function calcBalance(accountId) {
       if (t.fromAccountId === accountId) bal -= Number(t.amount);
       if (t.toAccountId === accountId) {
         let addAmt = Number(t.amount);
-        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-          try {
-            const meta = JSON.parse(t.subCategory);
-            if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
-              addAmt = meta.toAmount;
-            }
-          } catch(e) {}
+        const meta = parseTransferMeta(t);
+        if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
+          addAmt = meta.toAmount;
         }
         bal += addAmt;
       }
@@ -649,7 +670,7 @@ function iconImg(key, size = 32, cls = '') {
 }
 
 // ── 계좌 찾기 ──────────────────────────────
-function findAccount(id) { return state.accounts.find(a => a.$id === id); }
+function findAccount(id) { return state.accounts.find(a => a.$id === id || a.id === id); }
 function getCurrencySymbol(code) {
   return CURRENCIES.find(c => c.code === code)?.symbol || code;
 }
@@ -1541,10 +1562,7 @@ function renderTxItem(t, context = 'home') {
   let sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
   let cls = t.type;
 
-  let meta = null;
-  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-    try { meta = JSON.parse(t.subCategory); } catch(e) {}
-  }
+  let meta = parseTransferMeta(t);
 
   // 계좌 상세 내역(context === 'account')인 경우 이체 금액 및 기호 맞춤
   if (context === 'account' && t.type === 'transfer' && window.currentAccountHistoryId) {
@@ -1675,13 +1693,9 @@ function openAddModal(txId = null) {
         store.selectedTransferFrom = t.fromAccountId;
         store.selectedTransferTo = t.toAccountId;
 
-        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-          try {
-            const meta = JSON.parse(t.subCategory);
-            if (meta && meta.rate && rateInput) {
-              rateInput.value = meta.rate;
-            }
-          } catch(e) {}
+        const meta = parseTransferMeta(t);
+        if (meta && meta.rate && rateInput) {
+          rateInput.value = meta.rate;
         }
       }
       store.selectedTxAccountId = t.accountId || t.fromAccountId;
@@ -1882,7 +1896,7 @@ function updateTransferExchangeCalc() {
 
   const resEl = document.getElementById('transferConvertedResult');
   if (resEl) {
-    resEl.textContent = fmtMoney(toAmount, toCur);
+    resEl.innerHTML = fmtMoney(toAmount, toCur);
   }
 }
 
@@ -1938,12 +1952,11 @@ async function saveTx() {
       }
 
       mainCat = '환전이체';
-      subCat = JSON.stringify({
-        rate: rateVal,
-        toAmount: toAmount,
-        fromCur: fromCur,
-        toCur: toCur
-      });
+      // 💡 Appwrite subCategory 50자 제한 완벽 대응 (fromCur/toCur는 계좌에서 취득 가능하므로 환율과 입금액만 단축 저장)
+      subCat = JSON.stringify({ r: rateVal, a: toAmount });
+      if (subCat.length > 50) {
+        subCat = JSON.stringify({ r: Number(rateVal.toFixed(4)), a: Math.round(toAmount) });
+      }
     }
 
     data = {
@@ -2019,10 +2032,7 @@ function showTxDetail(txId) {
   const cur = acc?.currency || 'VND';
   const toAcc = t.toAccountId ? findAccount(t.toAccountId) : null;
 
-  let meta = null;
-  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-    try { meta = JSON.parse(t.subCategory); } catch(e){}
-  }
+  let meta = parseTransferMeta(t);
 
   let catDisplay = `${t.mainCategory || ''}${t.subCategory ? ' > ' + t.subCategory : ''}`;
   if (t.type === 'transfer' && meta) {

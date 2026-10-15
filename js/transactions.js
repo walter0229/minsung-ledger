@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading, calcBalance } from './utils.js';
+import { state, fmtDate, fmtMoney, getCurrencySymbol, findAccount, iconImg, toast, showLoading, calcBalance, parseTransferMeta } from './utils.js';
 import { store } from './store.js';
 import { CATEGORIES, ICONS, MAIN_CAT_ICONS, INCOME_CATEGORIES } from './config.js';
 import { openModal, closeModal } from './ui.js';
@@ -31,10 +31,7 @@ export function renderTxItem(t, context = 'home') {
   let sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
   let cls = t.type;
 
-  let meta = null;
-  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-    try { meta = JSON.parse(t.subCategory); } catch(e) {}
-  }
+  let meta = parseTransferMeta(t);
 
   // 계좌 상세 내역(context === 'account')인 경우 이체 금액 및 기호 맞춤
   if (context === 'account' && t.type === 'transfer' && window.currentAccountHistoryId) {
@@ -165,13 +162,9 @@ export function openAddModal(txId = null) {
         store.selectedTransferFrom = t.fromAccountId;
         store.selectedTransferTo = t.toAccountId;
 
-        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-          try {
-            const meta = JSON.parse(t.subCategory);
-            if (meta && meta.rate && rateInput) {
-              rateInput.value = meta.rate;
-            }
-          } catch(e) {}
+        const meta = parseTransferMeta(t);
+        if (meta && meta.rate && rateInput) {
+          rateInput.value = meta.rate;
         }
       }
       store.selectedTxAccountId = t.accountId || t.fromAccountId;
@@ -372,7 +365,7 @@ export function updateTransferExchangeCalc() {
 
   const resEl = document.getElementById('transferConvertedResult');
   if (resEl) {
-    resEl.textContent = fmtMoney(toAmount, toCur);
+    resEl.innerHTML = fmtMoney(toAmount, toCur);
   }
 }
 
@@ -428,12 +421,11 @@ export async function saveTx() {
       }
 
       mainCat = '환전이체';
-      subCat = JSON.stringify({
-        rate: rateVal,
-        toAmount: toAmount,
-        fromCur: fromCur,
-        toCur: toCur
-      });
+      // 💡 Appwrite subCategory 50자 제한 완벽 대응 (fromCur/toCur는 계좌에서 취득 가능하므로 환율과 입금액만 단축 저장)
+      subCat = JSON.stringify({ r: rateVal, a: toAmount });
+      if (subCat.length > 50) {
+        subCat = JSON.stringify({ r: Number(rateVal.toFixed(4)), a: Math.round(toAmount) });
+      }
     }
 
     data = {
@@ -509,10 +501,7 @@ export function showTxDetail(txId) {
   const cur = acc?.currency || 'VND';
   const toAcc = t.toAccountId ? findAccount(t.toAccountId) : null;
 
-  let meta = null;
-  if (t.type === 'transfer' && t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-    try { meta = JSON.parse(t.subCategory); } catch(e){}
-  }
+  let meta = parseTransferMeta(t);
 
   let catDisplay = `${t.mainCategory || ''}${t.subCategory ? ' > ' + t.subCategory : ''}`;
   if (t.type === 'transfer' && meta) {

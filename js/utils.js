@@ -125,6 +125,31 @@ export async function loadAll() {
   })();
 }
 
+// ── 이체 환율/입금액 메타데이터 파서 (하위 호환 및 50자 제한 완벽 대응) ────
+export function parseTransferMeta(t) {
+  if (!t || t.type !== 'transfer' || !t.subCategory || typeof t.subCategory !== 'string' || !t.subCategory.startsWith('{')) {
+    return null;
+  }
+  try {
+    const raw = JSON.parse(t.subCategory);
+    if (!raw || typeof raw !== 'object') return null;
+
+    const fromAcc = findAccount(t.fromAccountId);
+    const toAcc = findAccount(t.toAccountId);
+
+    const rate = Number(raw.rate !== undefined ? raw.rate : raw.r);
+    const toAmount = Number(raw.toAmount !== undefined ? raw.toAmount : raw.a);
+    const fromCur = raw.fromCur || fromAcc?.currency || 'VND';
+    const toCur = raw.toCur || toAcc?.currency || 'VND';
+
+    if (isNaN(rate) || isNaN(toAmount)) return null;
+
+    return { rate, toAmount, fromCur, toCur };
+  } catch (e) {
+    return null;
+  }
+}
+
 // ── 계좌 잔액 계산 ─────────────────────────
 export function calcBalance(accountId) {
   let bal = 0;
@@ -135,13 +160,9 @@ export function calcBalance(accountId) {
       if (t.fromAccountId === accountId) bal -= Number(t.amount);
       if (t.toAccountId === accountId) {
         let addAmt = Number(t.amount);
-        if (t.subCategory && typeof t.subCategory === 'string' && t.subCategory.startsWith('{')) {
-          try {
-            const meta = JSON.parse(t.subCategory);
-            if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
-              addAmt = meta.toAmount;
-            }
-          } catch(e) {}
+        const meta = parseTransferMeta(t);
+        if (meta && typeof meta.toAmount === 'number' && !isNaN(meta.toAmount)) {
+          addAmt = meta.toAmount;
         }
         bal += addAmt;
       }
@@ -435,7 +456,7 @@ export function iconImg(key, size = 32, cls = '') {
 }
 
 // ── 계좌 찾기 ──────────────────────────────
-export function findAccount(id) { return state.accounts.find(a => a.$id === id); }
+export function findAccount(id) { return state.accounts.find(a => a.$id === id || a.id === id); }
 export function getCurrencySymbol(code) {
   return CURRENCIES.find(c => c.code === code)?.symbol || code;
 }
