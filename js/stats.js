@@ -529,27 +529,49 @@ async function renderAssetChart() {
 
 async function renderBalanceTrendChart() {
   const baseCur = 'VND';
-  const [y, m] = state.currentMonth.split('-').map(Number);
+  if (!state.accounts || !state.accounts.length) return;
+
   const today = new Date();
-  // 이번 달 1일부터 오늘(또는 말일)까지 날짜 목록 생성
-  const lastDay = (today.getFullYear() === y && today.getMonth() + 1 === m)
-    ? today.getDate()
-    : new Date(y, m, 0).getDate();
+  const endYear = today.getFullYear();
+  const endMonth = today.getMonth() + 1; // 1-12
+
+  // 💡 데이터에 기록된 실제 유효 월 범위 산출 (2026-01 이후 기준)
+  const txMonths = (state.transactions || [])
+    .map(t => (t.date || '').slice(0, 7))
+    .filter(m => m >= '2026-01' && m <= `${endYear}-${String(endMonth).padStart(2, '0')}`)
+    .sort();
+
+  const startMonthStr = txMonths.length > 0 ? txMonths[0] : '2026-04';
+  const [sY, sM] = startMonthStr.split('-').map(Number);
+
+  const monthsList = [];
+  let curY = sY;
+  let curM = sM;
+  while (curY < endYear || (curY === endYear && curM <= endMonth)) {
+    monthsList.push(`${curY}-${String(curM).padStart(2, '0')}`);
+    curM++;
+    if (curM > 12) {
+      curM = 1;
+      curY++;
+    }
+  }
 
   const labels = [];
   const dataPoints = [];
 
-  for (let day = 1; day <= lastDay; day++) {
-    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    labels.push(`${m}/${day}`);
+  // 💡 매월 1일 기준 누적 총 순자산(VND) 계산
+  for (const mStr of monthsList) {
+    const [y, m] = mStr.split('-').map(Number);
+    const dateStr = `${mStr}-01`;
+    labels.push(`${m}월 1일`);
 
-    // 해당 날짜 이전까지의 모든 거래 누적 잔액 계산
     let totalVND = 0;
     for (const acc of state.accounts) {
       const cur = acc.currency || 'VND';
       let bal = Number(acc.initialBalance) || 0;
       for (const t of state.transactions) {
         const tDate = (t.date || '').slice(0, 10);
+        // 해당 월 1일까지의 모든 누적 거래 반영
         if (tDate > dateStr) continue;
         if (t.type === 'income' && t.accountId === acc.$id) bal += Number(t.amount);
         if (t.type === 'expense' && t.accountId === acc.$id) bal -= Number(t.amount);
@@ -579,7 +601,8 @@ async function renderBalanceTrendChart() {
         borderColor: '#7c6af7',
         backgroundColor: 'rgba(124,106,247,0.12)',
         borderWidth: 2,
-        pointRadius: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
         pointBackgroundColor: '#a78bfa',
         fill: true,
         tension: 0.3
@@ -590,11 +613,23 @@ async function renderBalanceTrendChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${Math.round(ctx.raw).toLocaleString()} VND` } }
+        tooltip: {
+          callbacks: {
+            title: (items) => `${items[0].label} 기준`,
+            label: (ctx) => ` 총 잔액: ${Math.round(ctx.raw).toLocaleString()} VND`
+          }
+        }
       },
       scales: {
-        x: { ticks: { color: '#9090b0', font: { size: 9 }, maxTicksLimit: 10 }, grid: { color: '#2e2e3e' } },
-        y: { ticks: { color: '#9090b0', font: { size: 9 }, callback: v => (v/1000000).toFixed(0) + 'M' }, grid: { color: '#2e2e3e' } }
+        x: { ticks: { color: '#9090b0', font: { size: 10 } }, grid: { color: '#2e2e3e' } },
+        y: {
+          ticks: {
+            color: '#9090b0',
+            font: { size: 9 },
+            callback: v => (v >= 1000000 || v <= -1000000 ? (v / 1000000).toFixed(0) + 'M' : v.toLocaleString())
+          },
+          grid: { color: '#2e2e3e' }
+        }
       }
     }
   });
