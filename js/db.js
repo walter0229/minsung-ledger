@@ -1,4 +1,4 @@
-import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DB_ID, COL } from './config.js';
+import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, PUBLIC_SERVER_IP, PUBLIC_SERVER_PORT, CLOUD_BACKUP_ENDPOINT, DB_ID, COL } from './config.js';
 
 // =============================================
 // 민성이의 가계부 - Appwrite DB 레이어 (복구 및 호환성 버전)
@@ -7,6 +7,7 @@ import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, DB_ID, COL } from './config.js'
 class AppwriteDB {
   constructor() {
     this.errorLog = [];
+    this.activeEndpoint = APPWRITE_ENDPOINT;
     try {
       if (!window.Appwrite) {
         this.logError('Appwrite SDK 로드 실패: window.Appwrite가 존재하지 않습니다.');
@@ -15,8 +16,8 @@ class AppwriteDB {
         return;
       }
       this.client = new window.Appwrite.Client();
-      this.client.setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
-      console.log(`📡 DB 초기화: ${APPWRITE_ENDPOINT} (Project: ${APPWRITE_PROJECT_ID})`);
+      this.client.setEndpoint(this.activeEndpoint).setProject(APPWRITE_PROJECT_ID);
+      console.log(`📡 DB 초기화: ${this.activeEndpoint} (Project: ${APPWRITE_PROJECT_ID})`);
       this.account = new window.Appwrite.Account(this.client);
       this.databases = new window.Appwrite.Databases(this.client);
       this.online = true;
@@ -62,22 +63,70 @@ class AppwriteDB {
     if (window.renderDiagnostics) window.renderDiagnostics();
   }
 
+  async testEndpointHealth(endpointUrl, timeoutMs = 2200) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${endpointUrl}/health`, {
+        method: 'GET',
+        headers: { 'X-Appwrite-Project': APPWRITE_PROJECT_ID },
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      return res.ok || res.status === 401 || res.status === 403;
+    } catch (e) {
+      clearTimeout(timer);
+      return false;
+    }
+  }
+
   async ensureSession() {
     if (!window.Appwrite) return;
-    try {
-      await this.account.get();
-      console.log('✅ 기존 세션 연결 성공');
-      this.online = true;
-    } catch (e) {
+
+    // 후보 엔드포인트 목록 (1순위: 설정된 공인 IP / 현재 접속 서버 -> 2순위: 내부망 -> 3순위: 클라우드 백업)
+    const isHttpsPage = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+    const candidates = [];
+
+    if (!isHttpsPage) {
+      if (typeof window !== 'undefined' && window.location && window.location.protocol === 'http:' && window.location.host && !window.location.host.includes('github.io')) {
+        candidates.push(`${window.location.origin}/v1`);
+      }
+      candidates.push(`http://${PUBLIC_SERVER_IP}:${PUBLIC_SERVER_PORT}/v1`);
+      candidates.push(`http://${PUBLIC_SERVER_IP}/v1`);
+      candidates.push('http://192.168.150.240:8080/v1');
+    }
+    if (this.activeEndpoint && !candidates.includes(this.activeEndpoint) && (!isHttpsPage || this.activeEndpoint.startsWith('https:'))) {
+      candidates.unshift(this.activeEndpoint);
+    }
+    if (CLOUD_BACKUP_ENDPOINT && !candidates.includes(CLOUD_BACKUP_ENDPOINT)) {
+      candidates.push(CLOUD_BACKUP_ENDPOINT);
+    }
+
+    for (const ep of candidates) {
+      const reachable = await this.testEndpointHealth(ep);
+      if (!reachable) continue;
+
+      this.activeEndpoint = ep;
+      this.client.setEndpoint(ep).setProject(APPWRITE_PROJECT_ID);
       try {
-        await this.account.createAnonymousSession();
-        console.log('✅ 익명 세션 생성 성공');
+        await this.account.get();
+        console.log(`✅ DB 서버 연결 성공 (${ep})`);
         this.online = true;
-      } catch (err) {
-        console.warn('세션 수립 지연 (오프라인 모드 유지):', err.message);
-        this.online = false;
+        return;
+      } catch (e) {
+        try {
+          await this.account.createAnonymousSession();
+          console.log(`✅ DB 서버 익명 세션 생성 성공 (${ep})`);
+          this.online = true;
+          return;
+        } catch (err) {
+          console.warn(`세션 시도 실패 (${ep}):`, err.message);
+        }
       }
     }
+
+    console.warn('모든 서버 엔드포인트 연결 지연 (오프라인 모드 유지)');
+    this.online = false;
   }
 
   async reconnect() {
