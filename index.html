@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <title>가계부 업데이트 중...</title>
     <script>
-        // v1.441: 파일(file://) 모드 호환성 강화 및 강제 리다이렉트
+        // v1.442: 공인 IP 자체 서버(103.106.141.150) 자동 연동 및 캐시 초기화
         (async function() {
             console.log("🚀 가계부 진입 시도...");
+            const PUBLIC_IP = '103.106.141.150';
+            const targetUrl = (window.location.hostname && window.location.hostname.includes('github.io'))
+                ? `http://${PUBLIC_IP}:8080/app.html?v=1.442`
+                : "app.html?v=1.442";
             
             // 안전 장치: 3초 뒤에도 안 넘어가면 강제 이동
             const forceRedirect = setTimeout(() => {
-                window.location.href = "app.html?v=1.441";
+                window.location.href = targetUrl;
             }, 3000);
 
             try {
@@ -45,14 +49,14 @@
                 if(customEp) localStorage.setItem('CUSTOM_APPWRITE_ENDPOINT', customEp);
                 if(customPr) localStorage.setItem('CUSTOM_APPWRITE_PROJECT_ID', customPr);
 
-                localStorage.setItem('app-ver', '1.441');
+                localStorage.setItem('app-ver', '1.442');
             } catch (e) {
                 console.warn("초기화 과정 중 오류 발생(무시됨):", e.message);
             }
 
             // 4. 새로운 진입점으로 강제 이동
             clearTimeout(forceRedirect);
-            window.location.href = "app.html?v=1.441";
+            window.location.href = targetUrl;
         })();
     </script>
 </head>

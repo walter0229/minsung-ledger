@@ -245,14 +245,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.441',
+      version: '1.442',
       updatedAt: dbStore.updatedAt,
       counts: {
         accounts: (dbStore.collections.accounts || []).length,
         transactions: (dbStore.collections.transactions || []).length,
         budgets: (dbStore.collections.budgets || []).length,
         settings: (dbStore.collections['app-settings'] || []).length
-      }
+      },
+      extraDatabases: Object.keys(dbStore.databases || {})
     });
   }
 
@@ -277,17 +278,24 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // 3. Appwrite Databases Documents CRUD 호환 엔드포인트
+  // 3. Appwrite Databases Documents CRUD 호환 엔드포인트 (다중 앱 DB 완벽 분리 지원)
   const colMatch = pathname.match(/^\/v1\/databases\/([^/]+)\/collections\/([^/]+)\/documents(?:\/([^/]+))?$/);
   if (colMatch) {
     const dbId = colMatch[1];
     const colId = colMatch[2];
     const docIdParam = colMatch[3];
 
-    if (!dbStore.collections[colId]) {
-      dbStore.collections[colId] = [];
+    let targetCols = dbStore.collections;
+    if (dbId !== 'ledger-db') {
+      if (!dbStore.databases) dbStore.databases = {};
+      if (!dbStore.databases[dbId]) dbStore.databases[dbId] = {};
+      targetCols = dbStore.databases[dbId];
     }
-    const colList = dbStore.collections[colId];
+
+    if (!targetCols[colId]) {
+      targetCols[colId] = [];
+    }
+    const colList = targetCols[colId];
 
     // [GET] 문서 목록 또는 단일 문서 조회
     if (req.method === 'GET') {

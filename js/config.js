@@ -187,4 +187,4 @@ export const INCOME_CATEGORIES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.441';
+export const APP_VERSION = '1.442';
