@@ -8,8 +8,12 @@
 // 민성이의 가계부 - 설정 파일
 // =============================================
 
-const APPWRITE_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
-const APPWRITE_PROJECT_ID = '69ca6dd30013a519ec48';
+// 자체 구축 서버 커스텀 엔드포인트 지원 (localStorage 설정 시 우선 적용)
+const _customEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT') : null;
+const _customProjectId = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_PROJECT_ID') : null;
+
+const APPWRITE_ENDPOINT = _customEndpoint || 'https://sgp.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT_ID = _customProjectId || '69ca6dd30013a519ec48';
 const DB_ID = 'ledger-db';
 
 // 컬렉션 ID
