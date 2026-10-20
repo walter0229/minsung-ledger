@@ -15,7 +15,7 @@
 <script>
   // 🚀 Clean Recovery & Save API Bridge (v1.440)
   (function() {
-    localStorage.setItem('app-ver', '1.443');
+    localStorage.setItem('app-ver', '1.444');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         for(let reg of regs) reg.unregister();
@@ -92,11 +92,273 @@
   window.openAddModal = function(id) { if(window.__openAddModal) window.__openAddModal(id); };
   window.prevMonth = function() { if(window.__prevMonth) window.__prevMonth(); };
   window.nextMonth = function() { if(window.__nextMonth) window.__nextMonth(); };
+
+  // 🔐 전역 fetch 인터셉터: 모든 /v1/ API 요청에 PIN 인증 토큰 자동 첨부
+  (function() {
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = function(input, init) {
+      try {
+        const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        const token = localStorage.getItem('LEDGER_PIN_TOKEN') || sessionStorage.getItem('LEDGER_PIN_TOKEN') || '';
+        if (token && urlStr.includes('/v1/')) {
+          init = init || {};
+          if (typeof Headers !== 'undefined' && init.headers instanceof Headers) {
+            init.headers.set('X-Ledger-Pin-Token', token);
+          } else {
+            init.headers = Object.assign({}, init.headers || {}, { 'X-Ledger-Pin-Token': token });
+          }
+        }
+      } catch (e) {}
+      return _origFetch(input, init);
+    };
+  })();
+
+  // 🔐 가계부 PIN 잠금 화면 제어 및 서버 검증 로직
+  (function() {
+    let pinBuffer = '';
+    let expectedPinLen = 4;
+    let unlockResolver = null;
+    let activeAuthBase = null;
+
+    async function resolveAuthBase() {
+      if (activeAuthBase) return activeAuthBase;
+      const candidates = [];
+      if (window.location && (window.location.protocol === 'http:' || window.location.protocol === 'https:') && window.location.host && !window.location.host.includes('github.io')) {
+        candidates.push(window.location.origin + '/v1');
+      }
+      const customEp = localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT');
+      if (customEp && !candidates.includes(customEp)) candidates.push(customEp);
+      if (window.location.protocol !== 'https:') {
+        candidates.push('http://ledger.minsungvn.com/v1');
+        candidates.push('http://103.106.141.150:8080/v1');
+      } else {
+        candidates.push('https://ledger.minsungvn.com/v1');
+      }
+      for (const base of candidates) {
+        try {
+          const res = await fetch(base + '/auth/pin-status');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.ok) {
+              activeAuthBase = base;
+              expectedPinLen = Number(data.pinLength) || 4;
+              return base;
+            }
+          }
+        } catch (e) {}
+      }
+      activeAuthBase = candidates[0] || 'http://ledger.minsungvn.com/v1';
+      return activeAuthBase;
+    }
+
+    function updatePinDots(isError = false) {
+      const dotsWrap = document.getElementById('pinDotsWrap');
+      if (!dotsWrap) return;
+      const len = Math.max(expectedPinLen, pinBuffer.length, 4);
+      let html = '';
+      for (let i = 0; i < len; i++) {
+        const filled = i < pinBuffer.length;
+        const bg = isError ? '#f87171' : (filled ? '#7c6af7' : 'rgba(255,255,255,0.16)');
+        const scale = filled ? 'scale(1.15)' : 'scale(1)';
+        html += `<div style="width:14px;height:14px;border-radius:50%;background:${bg};transform:${scale};transition:all 0.15s;"></div>`;
+      }
+      dotsWrap.innerHTML = html;
+    }
+
+    window.pinKeyPress = function(digit) {
+      if (pinBuffer.length >= 8) return;
+      pinBuffer += String(digit);
+      const msgEl = document.getElementById('pinLockMsg');
+      if (msgEl) {
+        msgEl.textContent = '비밀번호(PIN)를 입력해주세요';
+        msgEl.style.color = '#a1a1aa';
+      }
+      updatePinDots(false);
+      if (pinBuffer.length === expectedPinLen) {
+        window.submitPinUnlock(true);
+      }
+    };
+
+    window.pinKeyBack = function() {
+      if (!pinBuffer.length) return;
+      pinBuffer = pinBuffer.slice(0, -1);
+      updatePinDots(false);
+    };
+
+    window.pinKeyClear = function() {
+      pinBuffer = '';
+      updatePinDots(false);
+    };
+
+    window.submitPinUnlock = async function(isAuto = false) {
+      if (!pinBuffer.length) return;
+      const base = await resolveAuthBase();
+      const msgEl = document.getElementById('pinLockMsg');
+      try {
+        const res = await fetch(base + '/auth/pin-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinBuffer })
+        });
+        const data = await res.json();
+        if (res.ok && data && data.ok && data.token) {
+          sessionStorage.setItem('LEDGER_PIN_TOKEN', data.token);
+          const rememberEl = document.getElementById('pinRememberChk');
+          if (!rememberEl || rememberEl.checked) {
+            localStorage.setItem('LEDGER_PIN_TOKEN', data.token);
+          } else {
+            localStorage.removeItem('LEDGER_PIN_TOKEN');
+          }
+          if (window.db && window.db.applyPinTokenHeader) window.db.applyPinTokenHeader();
+          const overlay = document.getElementById('pinLockOverlay');
+          if (overlay) overlay.style.display = 'none';
+          pinBuffer = '';
+          if (unlockResolver) {
+            const resolve = unlockResolver;
+            unlockResolver = null;
+            resolve(true);
+          }
+        } else {
+          updatePinDots(true);
+          if (msgEl) {
+            msgEl.textContent = (data && data.message) ? data.message : 'PIN 번호가 일치하지 않습니다.';
+            msgEl.style.color = '#f87171';
+          }
+          setTimeout(() => {
+            pinBuffer = '';
+            updatePinDots(false);
+          }, 450);
+        }
+      } catch (err) {
+        if (msgEl) {
+          msgEl.textContent = '서버 통신 오류가 발생했습니다. 다시 시도해주세요.';
+          msgEl.style.color = '#f87171';
+        }
+      }
+    };
+
+    window.ensurePinUnlocked = async function() {
+      const overlay = document.getElementById('pinLockOverlay');
+      const base = await resolveAuthBase();
+      try {
+        const res = await fetch(base + '/auth/pin-status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.pinLength) expectedPinLen = Number(data.pinLength) || 4;
+          if (data && data.authenticated) {
+            if (overlay) overlay.style.display = 'none';
+            return true;
+          }
+        }
+      } catch (e) {}
+
+      if (overlay) {
+        overlay.style.display = 'flex';
+        updatePinDots(false);
+      }
+      return new Promise((resolve) => {
+        unlockResolver = resolve;
+      });
+    };
+
+    window.changeLedgerPin = async function() {
+      const curEl = document.getElementById('currentPinInput');
+      const newEl = document.getElementById('newPinInput');
+      if (!curEl || !newEl) return;
+      const currentPin = curEl.value.trim();
+      const newPin = newEl.value.trim();
+      if (!currentPin) {
+        alert('현재 PIN 번호를 입력해주세요.');
+        return;
+      }
+      if (!/^\d{4,8}$/.test(newPin)) {
+        alert('새 PIN 번호는 4~8자리 숫자로 입력해주세요.');
+        return;
+      }
+      const base = await resolveAuthBase();
+      try {
+        const res = await fetch(base + '/auth/pin-change', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPin, newPin })
+        });
+        const data = await res.json();
+        if (res.ok && data && data.ok) {
+          sessionStorage.setItem('LEDGER_PIN_TOKEN', data.token);
+          localStorage.setItem('LEDGER_PIN_TOKEN', data.token);
+          expectedPinLen = Number(data.pinLength) || newPin.length;
+          if (window.db && window.db.applyPinTokenHeader) window.db.applyPinTokenHeader();
+          curEl.value = '';
+          newEl.value = '';
+          alert('✅ PIN 비밀번호가 성공적으로 변경되었습니다!');
+        } else {
+          alert('❌ ' + ((data && data.message) || 'PIN 변경에 실패했습니다.'));
+        }
+      } catch (e) {
+        alert('❌ 서버와 통신할 수 없습니다.');
+      }
+    };
+
+    window.lockLedgerNow = function() {
+      localStorage.removeItem('LEDGER_PIN_TOKEN');
+      sessionStorage.removeItem('LEDGER_PIN_TOKEN');
+      document.cookie = 'ledger_pin_token=; Path=/; Max-Age=0';
+      window.location.reload();
+    };
+
+    window.addEventListener('keydown', function(e) {
+      const overlay = document.getElementById('pinLockOverlay');
+      if (!overlay || overlay.style.display === 'none') return;
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        window.pinKeyPress(e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        window.pinKeyBack();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        window.submitPinUnlock(false);
+      }
+    });
+  })();
 </script>
 </head>
 <body>
 
 <!-- 로딩 오버레이 -->
+<!-- 🔐 PIN 비밀번호 잠금 오버레이 (인증 전까지 데이터 접근 및 화면 완벽 차단) -->
+<div id="pinLockOverlay" style="display:flex; position:fixed; inset:0; z-index:99999; background:radial-gradient(circle at top,#1e1b38 0%,#0f0f14 70%); color:#fff; flex-direction:column; align-items:center; justify-content:center; padding:24px; user-select:none;">
+  <div style="width:100%; max-width:320px; text-align:center;">
+    <div style="width:60px; height:60px; border-radius:20px; background:linear-gradient(135deg,#7c6af7,#6366f1); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-size:28px; box-shadow:0 8px 24px rgba(124,106,247,0.4);">🔒</div>
+    <h2 style="margin:0 0 6px; font-size:20px; font-weight:700;">민성이의 가계부</h2>
+    <p id="pinLockMsg" style="margin:0 0 24px; font-size:13px; color:#a1a1aa;">비밀번호(PIN)를 입력해주세요</p>
+    <div id="pinDotsWrap" style="display:flex; gap:14px; justify-content:center; align-items:center; height:28px; margin-bottom:20px;">
+      <div style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.16);"></div>
+      <div style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.16);"></div>
+      <div style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.16);"></div>
+      <div style="width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.16);"></div>
+    </div>
+    <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#a1a1aa; margin-bottom:22px; cursor:pointer;">
+      <input type="checkbox" id="pinRememberChk" checked style="accent-color:#7c6af7; width:15px; height:15px; cursor:pointer;">
+      <span>이 기기에서 자동 잠금 해제 (기억하기)</span>
+    </label>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;">
+      <button type="button" onclick="pinKeyPress('1')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">1</button>
+      <button type="button" onclick="pinKeyPress('2')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">2</button>
+      <button type="button" onclick="pinKeyPress('3')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">3</button>
+      <button type="button" onclick="pinKeyPress('4')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">4</button>
+      <button type="button" onclick="pinKeyPress('5')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">5</button>
+      <button type="button" onclick="pinKeyPress('6')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">6</button>
+      <button type="button" onclick="pinKeyPress('7')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">7</button>
+      <button type="button" onclick="pinKeyPress('8')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">8</button>
+      <button type="button" onclick="pinKeyPress('9')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">9</button>
+      <button type="button" onclick="pinKeyBack()" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:#a1a1aa; font-size:16px; font-weight:600; cursor:pointer;">⌫</button>
+      <button type="button" onclick="pinKeyPress('0')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">0</button>
+      <button type="button" onclick="submitPinUnlock(false)" style="height:56px; border-radius:16px; border:none; background:linear-gradient(135deg,#7c6af7,#6366f1); color:#fff; font-size:15px; font-weight:700; cursor:pointer;">확인</button>
+    </div>
+  </div>
+</div>
+
 <div id="loadingOverlay">
   <div class="spinner"></div>
   <p style="color:var(--text2);font-size:13px;">불러오는 중...</p>
@@ -310,6 +572,26 @@
     </div>
     <div class="settings-wrap">
 
+      <!-- 🔒 보안 설정 (PIN 비밀번호) -->
+      <div class="settings-section">
+        <h3>🔒 보안 설정 (PIN 비밀번호)</h3>
+        <div style="font-size:12px; color:var(--text3); margin-bottom:12px; line-height:1.5;">
+          외부인이 주소로 접속해도 PIN 번호 없이는 가계부 데이터를 볼 수 없도록 서버에서 원천 차단됩니다.
+        </div>
+        <div class="form-group">
+          <label class="form-label">현재 PIN 번호</label>
+          <input type="password" inputmode="numeric" maxlength="8" class="form-input" id="currentPinInput" placeholder="현재 PIN 번호 입력">
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">새 PIN 번호 (4~8자리 숫자)</label>
+          <input type="password" inputmode="numeric" maxlength="8" class="form-input" id="newPinInput" placeholder="새 숫자 4~8자리 입력">
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="btn-primary btn-sm" onclick="changeLedgerPin()" style="flex:1;">🔑 PIN 번호 변경</button>
+          <button class="btn-secondary btn-sm" onclick="lockLedgerNow()" style="flex:1;">🔒 지금 화면 잠그기</button>
+        </div>
+      </div>
+
       <!-- API 설정 -->
       <div class="settings-section">
         <h3>🔑 API 설정</h3>
@@ -391,7 +673,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.443</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.444</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -701,6 +983,6 @@
     document.write('<script src="https://unpkg.com/appwrite@14.0.1/dist/iife/sdk.js"><\/script>');
   }
 </script>
-<script src="js/app.js?v=1.443"></script>
+<script src="js/app.js?v=1.444"></script>
 </body>
 </html>

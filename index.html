@@ -9,8 +9,8 @@
             console.log("🚀 가계부 진입 시도...");
             const PUBLIC_DOMAIN = 'ledger.minsungvn.com';
             const targetUrl = (window.location.hostname && window.location.hostname.includes('github.io'))
-                ? `http://${PUBLIC_DOMAIN}/app.html?v=1.443`
-                : "app.html?v=1.443";
+                ? `http://${PUBLIC_DOMAIN}/app.html?v=1.444`
+                : "app.html?v=1.444";
             
             // 안전 장치: 3초 뒤에도 안 넘어가면 강제 이동
             const forceRedirect = setTimeout(() => {
@@ -40,6 +40,7 @@
                 const budgets = localStorage.getItem('ledger_budgets');
                 const customEp = localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT');
                 const customPr = localStorage.getItem('CUSTOM_APPWRITE_PROJECT_ID');
+                const pinToken = localStorage.getItem('LEDGER_PIN_TOKEN');
                 
                 localStorage.clear();
                 
@@ -48,8 +49,9 @@
                 if(budgets) localStorage.setItem('ledger_budgets', budgets);
                 if(customEp) localStorage.setItem('CUSTOM_APPWRITE_ENDPOINT', customEp);
                 if(customPr) localStorage.setItem('CUSTOM_APPWRITE_PROJECT_ID', customPr);
+                if(pinToken) localStorage.setItem('LEDGER_PIN_TOKEN', pinToken);
 
-                localStorage.setItem('app-ver', '1.443');
+                localStorage.setItem('app-ver', '1.444');
             } catch (e) {
                 console.warn("초기화 과정 중 오류 발생(무시됨):", e.message);
             }

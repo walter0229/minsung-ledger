@@ -17,6 +17,7 @@ class AppwriteDB {
       }
       this.client = new window.Appwrite.Client();
       this.client.setEndpoint(this.activeEndpoint).setProject(APPWRITE_PROJECT_ID);
+      this.applyPinTokenHeader();
       console.log(`📡 DB 초기화: ${this.activeEndpoint} (Project: ${APPWRITE_PROJECT_ID})`);
       this.account = new window.Appwrite.Account(this.client);
       this.databases = new window.Appwrite.Databases(this.client);
@@ -53,6 +54,16 @@ class AppwriteDB {
         this.local.set(key, list.filter(i => i.$id !== id));
       }
     };
+  }
+
+  applyPinTokenHeader() {
+    try {
+      const token = localStorage.getItem('LEDGER_PIN_TOKEN') || sessionStorage.getItem('LEDGER_PIN_TOKEN') || '';
+      if (this.client && this.client.headers) {
+        if (token) this.client.headers['X-Ledger-Pin-Token'] = token;
+        else delete this.client.headers['X-Ledger-Pin-Token'];
+      }
+    } catch (e) {}
   }
 
   logError(msg) {
@@ -110,6 +121,7 @@ class AppwriteDB {
 
       this.activeEndpoint = ep;
       this.client.setEndpoint(ep).setProject(APPWRITE_PROJECT_ID);
+      this.applyPinTokenHeader();
       try {
         await this.account.get();
         console.log(`✅ DB 서버 연결 성공 (${ep})`);

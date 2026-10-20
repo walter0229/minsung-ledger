@@ -191,9 +191,58 @@ function setCorsHeaders(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, X-Appwrite-Project, X-Appwrite-Key, X-Appwrite-Response-Format, X-SDK-Version, X-SDK-Name, X-SDK-Language, X-SDK-Platform, X-Fallback-Cookies, Cookie, Authorization'
+    'Content-Type, X-Ledger-Pin-Token, X-Appwrite-Project, X-Appwrite-Key, X-Appwrite-Response-Format, X-SDK-Version, X-SDK-Name, X-SDK-Language, X-SDK-Platform, X-Fallback-Cookies, Cookie, Authorization'
   );
   res.setHeader('Access-Control-Expose-Headers', 'X-Fallback-Cookies, Set-Cookie');
+}
+
+// ============================================================================
+// 🔐 가계부 PIN 비밀번호 인증 및 무차별 대입(Brute-force) 차단 보안 모듈
+// ============================================================================
+const DEFAULT_PIN = '0229';
+const AUTH_SECRET_SEED = 'minsung-ledger-pin-secret-2026-v1';
+const failedPinAttempts = new Map();
+
+function hashPin(pin) {
+  return crypto.createHash('sha256').update('minsung-pin:' + String(pin || '').trim()).digest('hex');
+}
+
+function getPinHash() {
+  if (!dbStore.authPinHash) {
+    dbStore.authPinHash = hashPin(DEFAULT_PIN);
+    dbStore.authPinLength = DEFAULT_PIN.length;
+  }
+  return dbStore.authPinHash;
+}
+
+function getExpectedToken() {
+  return crypto.createHmac('sha256', AUTH_SECRET_SEED).update(getPinHash()).digest('hex');
+}
+
+function extractPinToken(req, parsedUrl) {
+  const headerToken = req.headers['x-ledger-pin-token'];
+  if (headerToken && typeof headerToken === 'string') return headerToken.trim();
+
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.match(/(?:^|;\s*)ledger_pin_token=([^;]+)/);
+  if (match && match[1]) return decodeURIComponent(match[1].trim());
+
+  if (parsedUrl && parsedUrl.query && parsedUrl.query.pinToken) {
+    return String(parsedUrl.query.pinToken).trim();
+  }
+  return '';
+}
+
+function isPinAuthenticated(req, parsedUrl) {
+  const token = extractPinToken(req, parsedUrl);
+  if (!token) return false;
+  return token === getExpectedToken();
+}
+
+function getClientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff && typeof xff === 'string') return xff.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
 }
 
 function sendJson(res, status, data) {
@@ -238,11 +287,17 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // 건강관리 앱(health.minsungvn.com)으로 HTTP(80) 접속 시 HTTPS로 자동 리다이렉트 (도메인 분리 보장)
+  // 도메인 분리 보장:
+  // 1) 건강관리 앱(health.minsungvn.com) -> HTTPS 리다이렉트
+  // 2) 루트 도메인(minsungvn.com)은 가계부에서 사용하지 않음 (ledger.minsungvn.com 전용)
   const hostHeader = (req.headers.host || '').toLowerCase();
   if (hostHeader.startsWith('health.minsungvn.com')) {
     res.writeHead(301, { Location: `https://health.minsungvn.com${req.url || '/'}` });
     return res.end();
+  }
+  if (hostHeader === 'minsungvn.com' || hostHeader.startsWith('minsungvn.com:') || hostHeader.startsWith('www.minsungvn.com')) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Not Found');
   }
 
   const parsedUrl = url.parse(req.url, true);
@@ -252,7 +307,8 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.443',
+      version: '1.444',
+      pinProtected: true,
       updatedAt: dbStore.updatedAt,
       counts: {
         accounts: (dbStore.collections.accounts || []).length,
@@ -261,6 +317,85 @@ const server = http.createServer(async (req, res) => {
         settings: (dbStore.collections['app-settings'] || []).length
       },
       extraDatabases: Object.keys(dbStore.databases || {})
+    });
+  }
+
+  // 1-2. 🔐 가계부 PIN 인증 상태 조회, 검증 및 변경 엔드포인트
+  if (pathname === '/v1/auth/pin-status' && req.method === 'GET') {
+    getPinHash();
+    return sendJson(res, 200, {
+      ok: true,
+      authenticated: isPinAuthenticated(req, parsedUrl),
+      pinLength: dbStore.authPinLength || 4
+    });
+  }
+
+  if (pathname === '/v1/auth/pin-verify' && req.method === 'POST') {
+    const clientIp = getClientIp(req);
+    const attempt = failedPinAttempts.get(clientIp) || { count: 0, lockUntil: 0 };
+    if (attempt.lockUntil && Date.now() < attempt.lockUntil) {
+      const remainSec = Math.ceil((attempt.lockUntil - Date.now()) / 1000);
+      return sendJson(res, 429, {
+        ok: false,
+        message: `비밀번호 5회 오류로 잠겼습니다. ${remainSec}초 후 다시 시도해주세요.`
+      });
+    }
+
+    const body = await readBody(req);
+    const inputPin = String(body.pin || '').trim();
+    if (hashPin(inputPin) === getPinHash()) {
+      failedPinAttempts.delete(clientIp);
+      const token = getExpectedToken();
+      res.setHeader('Set-Cookie', `ledger_pin_token=${token}; Path=/; Max-Age=31536000; SameSite=Lax`);
+      return sendJson(res, 200, {
+        ok: true,
+        token,
+        pinLength: dbStore.authPinLength || 4
+      });
+    } else {
+      const newCount = (attempt.lockUntil && Date.now() >= attempt.lockUntil) ? 1 : (attempt.count + 1);
+      const lockUntil = newCount >= 5 ? (Date.now() + 60 * 1000) : 0;
+      failedPinAttempts.set(clientIp, { count: newCount, lockUntil });
+      const remain = Math.max(0, 5 - newCount);
+      return sendJson(res, 401, {
+        ok: false,
+        message: lockUntil
+          ? '비밀번호를 5회 연속 틀려 1분간 입력이 잠겼습니다.'
+          : `PIN 번호가 일치하지 않습니다. (남은 시도: ${remain}회)`
+      });
+    }
+  }
+
+  if (pathname === '/v1/auth/pin-change' && req.method === 'POST') {
+    const body = await readBody(req);
+    const currentPin = String(body.currentPin || '').trim();
+    const newPin = String(body.newPin || '').trim();
+
+    if (hashPin(currentPin) !== getPinHash()) {
+      return sendJson(res, 401, {
+        ok: false,
+        message: '현재 PIN 번호가 일치하지 않습니다.'
+      });
+    }
+
+    if (!/^\d{4,8}$/.test(newPin)) {
+      return sendJson(res, 400, {
+        ok: false,
+        message: '새 PIN 번호는 4~8자리 숫자로 입력해주세요.'
+      });
+    }
+
+    dbStore.authPinHash = hashPin(newPin);
+    dbStore.authPinLength = newPin.length;
+    saveDatabase(true);
+
+    const token = getExpectedToken();
+    res.setHeader('Set-Cookie', `ledger_pin_token=${token}; Path=/; Max-Age=31536000; SameSite=Lax`);
+    return sendJson(res, 200, {
+      ok: true,
+      token,
+      pinLength: dbStore.authPinLength,
+      message: 'PIN 번호가 성공적으로 변경되었습니다.'
     });
   }
 
@@ -291,6 +426,15 @@ const server = http.createServer(async (req, res) => {
     const dbId = colMatch[1];
     const colId = colMatch[2];
     const docIdParam = colMatch[3];
+
+    // 🔐 가계부 DB(ledger-db)는 반드시 PIN 인증 토큰이 있어야만 접근 허용
+    if (dbId === 'ledger-db' && !isPinAuthenticated(req, parsedUrl)) {
+      return sendJson(res, 401, {
+        message: 'PIN 비밀번호 인증이 필요합니다.',
+        code: 401,
+        type: 'user_unauthorized'
+      });
+    }
 
     let targetCols = dbStore.collections;
     if (dbId !== 'ledger-db') {

@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. UI 및 진단 도구 초기화 (각 모달 자가등록 대기)
     if (window.initUI) window.initUI();
     if (window.renderDiagnostics) window.renderDiagnostics();
+    if (window.ensurePinUnlocked) await window.ensurePinUnlocked();
+    if (db && db.applyPinTokenHeader) db.applyPinTokenHeader();
 
     // 2. 데이터 베이스 로드
     await loadAll();
