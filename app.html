@@ -15,7 +15,7 @@
 <script>
   // 🚀 Clean Recovery & Save API Bridge (v1.440)
   (function() {
-    localStorage.setItem('app-ver', '1.444');
+    localStorage.setItem('app-ver', '1.445');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         for(let reg of regs) reg.unregister();
@@ -57,8 +57,7 @@
       localStorage.removeItem('CUSTOM_APPWRITE_PROJECT_ID');
       alert('기본 클라우드 설정으로 초기화되었습니다.');
       window.location.reload();
-    }
-  };
+    };
 
   // 🚀 API Key 저장 인라인 완전체 (구버전 캐시 호환)
   window.saveApiSettings = function() {
@@ -220,6 +219,15 @@
           }
         } else {
           updatePinDots(true);
+          if (data && data.blocked) {
+            if (msgEl) {
+              msgEl.textContent = data.message || '🚫 PIN 3회 오류로 현재 IP가 차단되었습니다.';
+              msgEl.style.color = '#f87171';
+            }
+            const grid = document.getElementById('pinKeypadGrid');
+            if (grid) grid.style.pointerEvents = 'none';
+            return;
+          }
           if (msgEl) {
             msgEl.textContent = (data && data.message) ? data.message : 'PIN 번호가 일치하지 않습니다.';
             msgEl.style.color = '#f87171';
@@ -245,6 +253,19 @@
         if (res.ok) {
           const data = await res.json();
           if (data && data.pinLength) expectedPinLen = Number(data.pinLength) || 4;
+          if (data && data.blocked) {
+            if (overlay) {
+              overlay.style.display = 'flex';
+              const msgEl = document.getElementById('pinLockMsg');
+              if (msgEl) {
+                msgEl.textContent = `🚫 PIN 3회 오류로 현재 IP(${data.clientIp || ''})가 차단되었습니다.`;
+                msgEl.style.color = '#f87171';
+              }
+              const grid = document.getElementById('pinKeypadGrid');
+              if (grid) grid.style.pointerEvents = 'none';
+            }
+            return new Promise(() => {});
+          }
           if (data && data.authenticated) {
             if (overlay) overlay.style.display = 'none';
             return true;
@@ -306,6 +327,61 @@
       window.location.reload();
     };
 
+    window.loadBlockedIps = async function() {
+      const wrap = document.getElementById('blockedIpListWrap');
+      if (!wrap) return;
+      const base = await resolveAuthBase();
+      try {
+        const res = await fetch(base + '/auth/blocked-ips');
+        const data = await res.json();
+        if (res.ok && data && data.ok) {
+          const list = data.list || [];
+          if (!list.length) {
+            wrap.innerHTML = '<div style="color:#71717a; padding:6px 0;">현재 차단된 IP가 없습니다.</div>';
+            return;
+          }
+          let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+          for (const item of list) {
+            const timeStr = item.blockedAt ? new Date(item.blockedAt).toLocaleString('ko-KR') : '';
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.04); padding:8px 10px; border-radius:6px; border:1px solid rgba(248,113,113,0.3);">
+              <div>
+                <div style="font-weight:600; color:#f87171; font-family:monospace;">${item.ip}</div>
+                <div style="font-size:10px; color:#a1a1aa;">차단시각: ${timeStr}</div>
+              </div>
+              <button class="btn-secondary btn-sm" onclick="unblockIpAddress('${item.ip}')" style="background:rgba(248,113,113,0.15); color:#f87171; border:1px solid #f87171; padding:3px 8px; font-size:11px;">차단 해제</button>
+            </div>`;
+          }
+          html += '</div>';
+          wrap.innerHTML = html;
+        } else {
+          wrap.innerHTML = '<div style="color:#f87171; padding:6px 0;">목록 조회 실패</div>';
+        }
+      } catch (e) {
+        wrap.innerHTML = '<div style="color:#f87171; padding:6px 0;">서버 통신 실패</div>';
+      }
+    };
+
+    window.unblockIpAddress = async function(ip) {
+      if (!confirm(`[${ip}] 차단을 해제하시겠습니까?`)) return;
+      const base = await resolveAuthBase();
+      try {
+        const res = await fetch(base + '/auth/unblock-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip })
+        });
+        const data = await res.json();
+        if (res.ok && data && data.ok) {
+          alert('✅ IP 차단이 해제되었습니다.');
+          window.loadBlockedIps();
+        } else {
+          alert('❌ 차단 해제 실패: ' + ((data && data.message) || ''));
+        }
+      } catch (e) {
+        alert('❌ 서버 통신 오류');
+      }
+    };
+
     window.addEventListener('keydown', function(e) {
       const overlay = document.getElementById('pinLockOverlay');
       if (!overlay || overlay.style.display === 'none') return;
@@ -342,7 +418,7 @@
       <input type="checkbox" id="pinRememberChk" checked style="accent-color:#7c6af7; width:15px; height:15px; cursor:pointer;">
       <span>이 기기에서 자동 잠금 해제 (기억하기)</span>
     </label>
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;">
+    <div id="pinKeypadGrid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;">
       <button type="button" onclick="pinKeyPress('1')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">1</button>
       <button type="button" onclick="pinKeyPress('2')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">2</button>
       <button type="button" onclick="pinKeyPress('3')" style="height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.05); color:#fff; font-size:22px; font-weight:600; cursor:pointer;">3</button>
@@ -590,6 +666,22 @@
           <button class="btn-primary btn-sm" onclick="changeLedgerPin()" style="flex:1;">🔑 PIN 번호 변경</button>
           <button class="btn-secondary btn-sm" onclick="lockLedgerNow()" style="flex:1;">🔒 지금 화면 잠그기</button>
         </div>
+        <!-- 🚫 3회 오류 차단된 IP 목록 및 원클릭 해제 -->
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size:13px; font-weight:600; color:#f87171;">🚫 차단된 IP 목록 (3회 오류)</div>
+            <button class="btn-secondary btn-sm" onclick="loadBlockedIps()" style="padding:2px 8px; font-size:11px;">🔄 새로고침</button>
+          </div>
+          <div id="blockedIpListWrap" style="font-size:12px; color:var(--text3); line-height:1.5;">
+            차단된 IP가 없습니다.
+          </div>
+        </div>
+        <script>
+          (function() {
+            setTimeout(() => { if (window.loadBlockedIps) window.loadBlockedIps(); }, 600);
+          })();
+        </script>
+        </div>
       </div>
 
       <!-- API 설정 -->
@@ -673,7 +765,7 @@
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.444</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.445</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
@@ -983,6 +1075,6 @@
     document.write('<script src="https://unpkg.com/appwrite@14.0.1/dist/iife/sdk.js"><\/script>');
   }
 </script>
-<script src="js/app.js?v=1.444"></script>
+<script src="js/app.js?v=1.445"></script>
 </body>
 </html>

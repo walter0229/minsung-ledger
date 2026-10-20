@@ -114,7 +114,10 @@ export function showPage(name) {
   if (name === 'stats' && window.renderStats) window.renderStats();
   if (name === 'report' && window.renderReport) window.renderReport();
   if (name === 'accounts' && window.renderAccountsList) window.renderAccountsList();
-  if (name === 'settings' && window.renderSettings) window.renderSettings();
+  if (name === 'settings') {
+    if (window.renderSettings) window.renderSettings();
+    if (window.loadBlockedIps) window.loadBlockedIps();
+  }
 }
 
 // ─────────────────────────────────────────────

@@ -194,7 +194,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.444';
+const APP_VERSION = '1.445';
 
 
 // =============================================
@@ -1162,7 +1162,10 @@ function showPage(name) {
   if (name === 'stats' && window.renderStats) window.renderStats();
   if (name === 'report' && window.renderReport) window.renderReport();
   if (name === 'accounts' && window.renderAccountsList) window.renderAccountsList();
-  if (name === 'settings' && window.renderSettings) window.renderSettings();
+  if (name === 'settings') {
+    if (window.renderSettings) window.renderSettings();
+    if (window.loadBlockedIps) window.loadBlockedIps();
+  }
 }
 
 // ─────────────────────────────────────────────

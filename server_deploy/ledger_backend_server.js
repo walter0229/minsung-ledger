@@ -245,6 +245,31 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || 'unknown';
 }
 
+function getBlockedIps() {
+  if (!dbStore.blockedIps || typeof dbStore.blockedIps !== 'object') {
+    dbStore.blockedIps = {};
+  }
+  return dbStore.blockedIps;
+}
+
+function isIpBlocked(ip) {
+  if (!ip) return false;
+  const map = getBlockedIps();
+  return Boolean(map[ip]);
+}
+
+function blockIpAddress(ip, req, failCount = 3) {
+  if (!ip) return;
+  const map = getBlockedIps();
+  map[ip] = {
+    ip,
+    blockedAt: new Date().toISOString(),
+    failCount,
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 120)
+  };
+  saveDatabase(false);
+}
+
 function sendJson(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
@@ -307,7 +332,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.444',
+      version: '1.445',
       pinProtected: true,
       updatedAt: dbStore.updatedAt,
       counts: {
@@ -320,27 +345,31 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // 1-2. 🔐 가계부 PIN 인증 상태 조회, 검증 및 변경 엔드포인트
+  // 1-2. 🔐 가계부 PIN 인증 상태 조회, 검증, 변경 및 IP 차단 관리 엔드포인트
   if (pathname === '/v1/auth/pin-status' && req.method === 'GET') {
     getPinHash();
+    const clientIp = getClientIp(req);
+    const authed = isPinAuthenticated(req, parsedUrl);
     return sendJson(res, 200, {
       ok: true,
-      authenticated: isPinAuthenticated(req, parsedUrl),
+      authenticated: authed,
+      blocked: authed ? false : isIpBlocked(clientIp),
+      clientIp,
       pinLength: dbStore.authPinLength || 4
     });
   }
 
   if (pathname === '/v1/auth/pin-verify' && req.method === 'POST') {
     const clientIp = getClientIp(req);
-    const attempt = failedPinAttempts.get(clientIp) || { count: 0, lockUntil: 0 };
-    if (attempt.lockUntil && Date.now() < attempt.lockUntil) {
-      const remainSec = Math.ceil((attempt.lockUntil - Date.now()) / 1000);
-      return sendJson(res, 429, {
+    if (!isPinAuthenticated(req, parsedUrl) && isIpBlocked(clientIp)) {
+      return sendJson(res, 403, {
         ok: false,
-        message: `비밀번호 5회 오류로 잠겼습니다. ${remainSec}초 후 다시 시도해주세요.`
+        blocked: true,
+        message: `🚫 PIN 3회 오류로 현재 IP(${clientIp})가 차단되었습니다. 기존 연결된 기기의 [설정 → 보안 설정]에서 차단 해제해주세요.`
       });
     }
 
+    const attempt = failedPinAttempts.get(clientIp) || { count: 0 };
     const body = await readBody(req);
     const inputPin = String(body.pin || '').trim();
     if (hashPin(inputPin) === getPinHash()) {
@@ -353,17 +382,56 @@ const server = http.createServer(async (req, res) => {
         pinLength: dbStore.authPinLength || 4
       });
     } else {
-      const newCount = (attempt.lockUntil && Date.now() >= attempt.lockUntil) ? 1 : (attempt.count + 1);
-      const lockUntil = newCount >= 5 ? (Date.now() + 60 * 1000) : 0;
-      failedPinAttempts.set(clientIp, { count: newCount, lockUntil });
-      const remain = Math.max(0, 5 - newCount);
+      const newCount = (attempt.count || 0) + 1;
+      if (newCount >= 3) {
+        blockIpAddress(clientIp, req, newCount);
+        failedPinAttempts.delete(clientIp);
+        return sendJson(res, 403, {
+          ok: false,
+          blocked: true,
+          message: `🚫 PIN 번호 3회 연속 오류로 현재 IP(${clientIp})가 영구 차단되었습니다.`
+        });
+      }
+      failedPinAttempts.set(clientIp, { count: newCount });
+      const remain = Math.max(0, 3 - newCount);
       return sendJson(res, 401, {
         ok: false,
-        message: lockUntil
-          ? '비밀번호를 5회 연속 틀려 1분간 입력이 잠겼습니다.'
-          : `PIN 번호가 일치하지 않습니다. (남은 시도: ${remain}회)`
+        blocked: false,
+        message: `PIN 번호가 일치하지 않습니다. (남은 시도: ${remain}회 / 3회 오류 시 IP 차단)`
       });
     }
+  }
+
+  if (pathname === '/v1/auth/blocked-ips' && req.method === 'GET') {
+    if (!isPinAuthenticated(req, parsedUrl)) {
+      return sendJson(res, 401, { ok: false, message: '인증이 필요합니다.' });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      list: Object.values(getBlockedIps())
+    });
+  }
+
+  if (pathname === '/v1/auth/unblock-ip' && req.method === 'POST') {
+    if (!isPinAuthenticated(req, parsedUrl)) {
+      return sendJson(res, 401, { ok: false, message: '인증이 필요합니다.' });
+    }
+    const body = await readBody(req);
+    const targetIp = String(body.ip || '').trim();
+    const map = getBlockedIps();
+    if (targetIp === '__ALL__') {
+      dbStore.blockedIps = {};
+      failedPinAttempts.clear();
+    } else if (targetIp) {
+      delete map[targetIp];
+      failedPinAttempts.delete(targetIp);
+    }
+    saveDatabase(false);
+    return sendJson(res, 200, {
+      ok: true,
+      list: Object.values(getBlockedIps()),
+      message: 'IP 차단이 해제되었습니다.'
+    });
   }
 
   if (pathname === '/v1/auth/pin-change' && req.method === 'POST') {
