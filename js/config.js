@@ -5,19 +5,20 @@
 // ============================================================================
 // ★ 서버실 이전 시 아래 PUBLIC_SERVER_IP 값만 새 공인 IP로 바꾸면 전체 자동 적용됩니다!
 // ============================================================================
+export const PUBLIC_SERVER_DOMAIN = 'ledger.minsungvn.com';
 export const PUBLIC_SERVER_IP = '103.106.141.150';
 export const PUBLIC_SERVER_PORT = '8080';
-export const SELF_HOST_ENDPOINT = `http://${PUBLIC_SERVER_IP}:${PUBLIC_SERVER_PORT}/v1`;
+export const SELF_HOST_ENDPOINT = `http://${PUBLIC_SERVER_DOMAIN}/v1`;
 export const CLOUD_BACKUP_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
 
 // 자체 구축 서버 커스텀 엔드포인트 및 접속 주소 자동 감지
 const _customEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT') : null;
 const _customProjectId = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_PROJECT_ID') : null;
-const _autoOriginEndpoint = (typeof window !== 'undefined' && window.location && window.location.protocol === 'http:' && window.location.host && !window.location.host.includes('github.io'))
+const _autoOriginEndpoint = (typeof window !== 'undefined' && window.location && (window.location.protocol === 'http:' || window.location.protocol === 'https:') && window.location.host && !window.location.host.includes('github.io'))
   ? `${window.location.origin}/v1`
   : null;
 
-export const APPWRITE_ENDPOINT = _customEndpoint || _autoOriginEndpoint || SELF_HOST_ENDPOINT;
+export const APPWRITE_ENDPOINT = _autoOriginEndpoint || _customEndpoint || SELF_HOST_ENDPOINT;
 export const APPWRITE_PROJECT_ID = _customProjectId || '69ca6dd30013a519ec48';
 export const DB_ID = 'ledger-db';
 
@@ -187,4 +188,4 @@ export const INCOME_CATEGORIES = [
 // Gemini 모델
 export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-export const APP_VERSION = '1.442';
+export const APP_VERSION = '1.443';

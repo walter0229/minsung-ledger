@@ -238,6 +238,13 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
+  // 건강관리 앱(health.minsungvn.com)으로 HTTP(80) 접속 시 HTTPS로 자동 리다이렉트 (도메인 분리 보장)
+  const hostHeader = (req.headers.host || '').toLowerCase();
+  if (hostHeader.startsWith('health.minsungvn.com')) {
+    res.writeHead(301, { Location: `https://health.minsungvn.com${req.url || '/'}` });
+    return res.end();
+  }
+
   const parsedUrl = url.parse(req.url, true);
   const pathname = decodeURIComponent(parsedUrl.pathname || '/');
 
@@ -245,7 +252,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.442',
+      version: '1.443',
       updatedAt: dbStore.updatedAt,
       counts: {
         accounts: (dbStore.collections.accounts || []).length,
@@ -397,6 +404,7 @@ function createHandler() {
 server.listen(PORT, '0.0.0.0', () => {
   console.log('======================================================================');
   console.log(` 🚀 민성이의 가계부 통합 DB & 웹 서버 가동 중! (Port: ${PORT})`);
+  console.log(`   - 도메인 접속 주소    : http://ledger.minsungvn.com`);
   console.log(`   - 공인 IP 접속 주소   : http://103.106.141.150:${PORT}`);
   console.log(`   - 계좌(accounts)      : ${dbStore.collections.accounts.length} 건`);
   console.log(`   - 거래(transactions)  : ${dbStore.collections.transactions.length} 건`);
@@ -412,7 +420,7 @@ if (PORT !== 80) {
     console.log(`ℹ️ 80번 포트 바인딩 건너뜀 (${err.code}): 기본 포트 ${PORT}번으로 정상 서비스됩니다.`);
   });
   server80.listen(80, '0.0.0.0', () => {
-    console.log(' 🌐 기본 HTTP 포트(80) 동시 개방 완료 -> http://103.106.141.150 바로 접속 가능!');
+    console.log(' 🌐 기본 HTTP 포트(80) 동시 개방 완료 -> http://ledger.minsungvn.com 바로 접속 가능!');
   });
 }
 

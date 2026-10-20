@@ -11,19 +11,20 @@
 // ============================================================================
 // ★ 서버실 이전 시 아래 PUBLIC_SERVER_IP 값만 새 공인 IP로 바꾸면 전체 자동 적용됩니다!
 // ============================================================================
+const PUBLIC_SERVER_DOMAIN = 'ledger.minsungvn.com';
 const PUBLIC_SERVER_IP = '103.106.141.150';
 const PUBLIC_SERVER_PORT = '8080';
-const SELF_HOST_ENDPOINT = `http://${PUBLIC_SERVER_IP}:${PUBLIC_SERVER_PORT}/v1`;
+const SELF_HOST_ENDPOINT = `http://${PUBLIC_SERVER_DOMAIN}/v1`;
 const CLOUD_BACKUP_ENDPOINT = 'https://sgp.cloud.appwrite.io/v1';
 
 // 자체 구축 서버 커스텀 엔드포인트 및 접속 주소 자동 감지
 const _customEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT') : null;
 const _customProjectId = typeof localStorage !== 'undefined' ? localStorage.getItem('CUSTOM_APPWRITE_PROJECT_ID') : null;
-const _autoOriginEndpoint = (typeof window !== 'undefined' && window.location && window.location.protocol === 'http:' && window.location.host && !window.location.host.includes('github.io'))
+const _autoOriginEndpoint = (typeof window !== 'undefined' && window.location && (window.location.protocol === 'http:' || window.location.protocol === 'https:') && window.location.host && !window.location.host.includes('github.io'))
   ? `${window.location.origin}/v1`
   : null;
 
-const APPWRITE_ENDPOINT = _customEndpoint || _autoOriginEndpoint || SELF_HOST_ENDPOINT;
+const APPWRITE_ENDPOINT = _autoOriginEndpoint || _customEndpoint || SELF_HOST_ENDPOINT;
 const APPWRITE_PROJECT_ID = _customProjectId || '69ca6dd30013a519ec48';
 const DB_ID = 'ledger-db';
 
@@ -193,7 +194,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.442';
+const APP_VERSION = '1.443';
 
 
 // =============================================
@@ -817,6 +818,8 @@ class AppwriteDB {
       if (typeof window !== 'undefined' && window.location && window.location.protocol === 'http:' && window.location.host && !window.location.host.includes('github.io')) {
         candidates.push(`${window.location.origin}/v1`);
       }
+      candidates.push(`http://${PUBLIC_SERVER_DOMAIN}/v1`);
+      candidates.push(`http://${PUBLIC_SERVER_DOMAIN}:${PUBLIC_SERVER_PORT}/v1`);
       candidates.push(`http://${PUBLIC_SERVER_IP}:${PUBLIC_SERVER_PORT}/v1`);
       candidates.push(`http://${PUBLIC_SERVER_IP}/v1`);
       candidates.push('http://192.168.150.240:8080/v1');

@@ -1,4 +1,4 @@
-import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, PUBLIC_SERVER_IP, PUBLIC_SERVER_PORT, CLOUD_BACKUP_ENDPOINT, DB_ID, COL } from './config.js';
+import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, PUBLIC_SERVER_DOMAIN, PUBLIC_SERVER_IP, PUBLIC_SERVER_PORT, CLOUD_BACKUP_ENDPOINT, DB_ID, COL } from './config.js';
 
 // =============================================
 // 민성이의 가계부 - Appwrite DB 레이어 (복구 및 호환성 버전)
@@ -91,6 +91,8 @@ class AppwriteDB {
       if (typeof window !== 'undefined' && window.location && window.location.protocol === 'http:' && window.location.host && !window.location.host.includes('github.io')) {
         candidates.push(`${window.location.origin}/v1`);
       }
+      candidates.push(`http://${PUBLIC_SERVER_DOMAIN}/v1`);
+      candidates.push(`http://${PUBLIC_SERVER_DOMAIN}:${PUBLIC_SERVER_PORT}/v1`);
       candidates.push(`http://${PUBLIC_SERVER_IP}:${PUBLIC_SERVER_PORT}/v1`);
       candidates.push(`http://${PUBLIC_SERVER_IP}/v1`);
       candidates.push('http://192.168.150.240:8080/v1');
