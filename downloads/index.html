@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>민성이의 가계부 앱 설치</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f0f14;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .card {
+      background: #181820;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+    }
+    .icon-box {
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #7c6af7, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 38px;
+      margin: 0 auto 20px;
+      box-shadow: 0 8px 24px rgba(124, 106, 247, 0.4);
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    p.desc { font-size: 14px; color: #a1a1aa; line-height: 1.5; margin-bottom: 24px; }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 16px;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #7c6af7, #6366f1);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(124, 106, 247, 0.4);
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: #e4e4e7;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-secondary:active { transform: scale(0.98); }
+    .guide-box {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 14px;
+      text-align: left;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+    .guide-box ol { padding-left: 18px; margin-top: 6px; }
+    .guide-box li { margin-bottom: 4px; }
+    .guide-box b { color: #fff; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="icon-box">💰</div>
+    <h1>민성이의 가계부 앱 설치</h1>
+    <p class="desc">PC 바탕화면 또는 스마트폰 홈 화면에 가계부 전용 앱을 설치하여 편리하게 이용하세요.</p>
+
+    <!-- 모바일 PWA 설치 버튼 (지원 브라우저에서 자동 활성화) -->
+    <button id="pwaInstallBtn" class="btn btn-primary" onclick="installPwa()" style="display:none;">
+      <span>📱</span> 스마트폰 홈화면에 앱 설치하기
+    </button>
+
+    <!-- PC용 설치 파일 다운로드 버튼 -->
+    <a href="/downloads/minsung-ledger-setup.zip" download="민성이의가계부_설치파일.zip" class="btn btn-primary" id="pcDownloadBtn">
+      <span>💻</span> PC 설치 파일 다운로드 (.zip)
+    </a>
+
+    <!-- 웹 바로가기 실행 버튼 -->
+    <a href="/" class="btn btn-secondary">
+      <span>🌐</span> 웹 브라우저로 바로 시작하기
+    </a>
+
+    <!-- 설치 안내 -->
+    <div class="guide-box">
+      <b>💡 설치 방법 안내</b>
+      <ol>
+        <li><b>스마트폰(안드로이드/아이폰)</b>: 브라우저 메뉴(⋮)에서 <b>[홈 화면에 추가]</b> 또는 <b>[앱 설치]</b>를 누르면 정식 앱으로 등록됩니다.</li>
+        <li><b>Windows PC</b>: 위 <b>[PC 설치 파일]</b> 다운로드 후 압축을 풀어 <b>[가계부_설치.bat]</b>를 실행하시면 바탕화면에 단독 실행 앱 아이콘이 생성됩니다.</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    let deferredPrompt = null;
+    const pwaBtn = document.getElementById('pwaInstallBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (pwaBtn) pwaBtn.style.display = 'flex';
+    });
+
+    window.installPwa = async function() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        }
+        deferredPrompt = null;
+        if (pwaBtn) pwaBtn.style.display = 'none';
+      } else {
+        alert('브라우저 우측 상단 메뉴(⋮)를 누른 후 [홈 화면에 추가] 또는 [앱 설치]를 선택해주세요!');
+      }
+    };
+
+    // 모바일 환경 감지
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      if (pwaBtn) pwaBtn.style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

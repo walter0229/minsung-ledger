@@ -299,7 +299,10 @@ const MIME_TYPES = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.zip': 'application/zip',
+  '.apk': 'application/vnd.android.package-archive',
+  '.bat': 'text/plain; charset=utf-8'
 };
 
 initDatabase();
@@ -332,7 +335,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.445',
+      version: '1.446',
       pinProtected: true,
       updatedAt: dbStore.updatedAt,
       counts: {
@@ -594,7 +597,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 4. 정적 웹 파일 서빙 (가계부 웹앱 자체 호스팅)
+  // 4. 설치 안내 페이지 바로가기 (/install)
+  if (pathname === '/install' || pathname === '/install/') {
+    const installHtmlPath = path.join(WEB_ROOT, 'downloads', 'index.html');
+    if (fs.existsSync(installHtmlPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return fs.createReadStream(installHtmlPath).pipe(res);
+    }
+  }
+
+  // 5. 정적 웹 파일 서빙 (가계부 웹앱 및 downloads 제공)
   let reqFile = pathname === '/' ? '/app.html' : pathname;
   const safePath = path.normalize(reqFile).replace(/^(\.\.[/\\])+/, '');
   const fullPath = path.join(WEB_ROOT, safePath);
@@ -602,7 +614,16 @@ const server = http.createServer(async (req, res) => {
   if (fullPath.startsWith(WEB_ROOT) && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
     const ext = path.extname(fullPath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
+    const headers = { 'Content-Type': contentType };
+
+    // 설치 파일 다운로드 시 첨부 헤더 부여
+    if (ext === '.zip' || ext === '.apk' || ext === '.bat') {
+      const filename = path.basename(fullPath);
+      headers['Content-Disposition'] = `attachment; filename="${filename}"`;
+      headers['Cache-Control'] = 'no-store';
+    }
+
+    res.writeHead(200, headers);
     return fs.createReadStream(fullPath).pipe(res);
   }
 
