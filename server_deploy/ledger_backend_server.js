@@ -616,10 +616,11 @@ const server = http.createServer(async (req, res) => {
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
     const headers = { 'Content-Type': contentType };
 
-    // 설치 파일 다운로드 시 첨부 헤더 부여
+    // 설치 파일 다운로드 시 첨부 헤더 부여 (RFC 5987 인코딩 안전 적용)
     if (ext === '.zip' || ext === '.apk' || ext === '.bat') {
       const filename = path.basename(fullPath);
-      headers['Content-Disposition'] = `attachment; filename="${filename}"`;
+      const encodedFilename = encodeURIComponent(filename);
+      headers['Content-Disposition'] = `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`;
       headers['Cache-Control'] = 'no-store';
     }
 
