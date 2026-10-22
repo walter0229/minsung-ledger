@@ -194,7 +194,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.447';
+const APP_VERSION = '1.448';
 
 
 // =============================================
@@ -1137,7 +1137,8 @@ function initFabDrag() {
 function checkDbStatus() {
   const el = document.getElementById('diagnosticBoard');
   if (el) {
-    const statusText = db.online ? '✅ 서버 연결됨' : '❌ 오프라인 모드';
+    const serverIp = '103.106.141.150';
+    const statusText = db.online ? `✅ 서버 연결됨 (${serverIp})` : '❌ 오프라인 모드';
     const logText = db.errorLog.length > 0 ? db.errorLog.join('<br>') : '기록된 에러가 없습니다.';
     el.innerHTML = `<div style="color:${db.online ? '#4ade80' : '#f87171'}; font-weight:700; margin-bottom:8px;">상태: ${statusText}</div>${logText}`;
   }

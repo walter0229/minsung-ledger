@@ -335,7 +335,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/v1/health' || pathname === '/api/health') {
     return sendJson(res, 200, {
       status: 'ok',
-      version: '1.447',
+      version: '1.448',
       pinProtected: true,
       updatedAt: dbStore.updatedAt,
       counts: {

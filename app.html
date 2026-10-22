@@ -15,7 +15,7 @@
 <script>
   // 🚀 Clean Recovery & Save API Bridge (v1.440)
   (function() {
-    localStorage.setItem('app-ver', '1.447');
+    localStorage.setItem('app-ver', '1.448');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         for(let reg of regs) reg.unregister();
@@ -27,37 +27,6 @@
       }).catch(() => {});
     }
   })();
-
-  // 🗄️ 자체 구축 DB 서버 설정 저장/초기화 함수
-  window.saveCustomDbSettings = function() {
-    const endpointEl = document.getElementById('customDbEndpoint');
-    const projectEl = document.getElementById('customDbProjectId');
-    if (!endpointEl || !projectEl) return;
-    const endpoint = endpointEl.value.trim();
-    const projectId = projectEl.value.trim();
-
-    if (!endpoint) {
-      alert('서버 엔드포인트 URL을 입력해 주세요.');
-      return;
-    }
-    if (!projectId) {
-      alert('프로젝트 ID를 입력해 주세요.');
-      return;
-    }
-
-    localStorage.setItem('CUSTOM_APPWRITE_ENDPOINT', endpoint);
-    localStorage.setItem('CUSTOM_APPWRITE_PROJECT_ID', projectId);
-    alert('✅ 새 DB 서버 설정이 저장되었습니다. 앱을 새로고침하여 적용합니다.');
-    window.location.reload();
-  };
-
-  window.resetCustomDbSettings = function() {
-    if (confirm('기본 클라우드 DB(Appwrite Cloud) 설정으로 복구하시겠습니까?')) {
-      localStorage.removeItem('CUSTOM_APPWRITE_ENDPOINT');
-      localStorage.removeItem('CUSTOM_APPWRITE_PROJECT_ID');
-      alert('기본 클라우드 설정으로 초기화되었습니다.');
-      window.location.reload();
-    };
 
   // 🚀 API Key 저장 인라인 완전체 (구버전 캐시 호환)
   window.saveApiSettings = function() {
@@ -451,7 +420,6 @@
           <div class="subtitle" id="homeMonthLabel"></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <a href="/install" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:12px;background:rgba(124,106,247,0.18);border:1px solid rgba(124,106,247,0.4);color:#c4b5fd;font-size:12px;font-weight:700;text-decoration:none;" title="앱 다운로드 및 설치"><span>📲</span> 앱 설치</a>
           <button onclick="prevMonth()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;">‹</button>
           <button onclick="nextMonth()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;">›</button>
           <button onclick="openCamera()" style="background:linear-gradient(135deg,#7c6af7,#6366f1);border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(124,106,247,0.5);" title="영수증 촬영">
@@ -728,61 +696,13 @@
         </div>
       </div>
 
-      <!-- 🗄️ 데이터베이스 서버 설정 (자체 서버 연동) -->
-      <div class="settings-section">
-        <h3>🗄️ DB 서버 설정 (개인/IDC 서버)</h3>
-        <div style="font-size:12px; color:var(--text3); margin-bottom:12px; line-height:1.5;">
-          현재 도메인(<b>ledger.minsungvn.com</b> / 공인 IP: 103.106.141.150) 서버로 세팅되어 있습니다. 향후 서버 이전 시 새 주소만 입력 후 저장하시면 즉시 변경됩니다.
-        </div>
-        <div class="form-group">
-          <label class="form-label">서버 엔드포인트 URL (공인 IP 변경 시 여기만 수정)</label>
-          <input type="text" class="form-input" id="customDbEndpoint" placeholder="http://ledger.minsungvn.com/v1">
-        </div>
-        <div class="form-group" style="margin-top:10px;">
-          <label class="form-label">프로젝트 ID</label>
-          <input type="text" class="form-input" id="customDbProjectId" placeholder="69ca6dd30013a519ec48">
-        </div>
-        <div style="display:flex; gap:8px; margin-top:12px;">
-          <button class="btn-primary btn-sm" onclick="saveCustomDbSettings()" style="flex:1;">저장 및 서버 전환</button>
-          <button class="btn-secondary btn-sm" onclick="resetCustomDbSettings()" style="flex:1;">기본값(ledger.minsungvn.com) 복구</button>
-        </div>
-        <script>
-          (function() {
-            const ep = localStorage.getItem('CUSTOM_APPWRITE_ENDPOINT') || 'http://ledger.minsungvn.com/v1';
-            const pr = localStorage.getItem('CUSTOM_APPWRITE_PROJECT_ID') || '69ca6dd30013a519ec48';
-            setTimeout(() => {
-              const epEl = document.getElementById('customDbEndpoint');
-              const prEl = document.getElementById('customDbProjectId');
-              if (epEl && ep) epEl.value = ep;
-              if (prEl && pr) prEl.value = pr;
-            }, 300);
-          })();
-        </script>
-      </div>
-
-      <!-- 📲 앱 설치 / 다운로드 -->
-      <div class="settings-section">
-        <h3>📲 앱 설치 및 다운로드</h3>
-        <div style="font-size:12px; color:var(--text3); margin-bottom:12px; line-height:1.5;">
-          PC 바탕화면 또는 스마트폰 홈 화면에 가계부 바로가기 앱을 설치하여 단독 실행 창으로 쾌적하게 사용하세요.
-        </div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <a href="/install" class="btn-primary btn-sm" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; text-decoration:none;">
-            <span>📱</span> 스마트폰 홈 화면에 앱 설치하기
-          </a>
-          <a href="/downloads/minsung-ledger-setup.zip" download="민성이의가계부_설치파일.zip" class="btn-secondary btn-sm" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; text-decoration:none;">
-            <span>💻</span> Windows PC 바탕화면 설치 파일 내려받기 (.zip)
-          </a>
-        </div>
-      </div>
-
       <!-- 앱 정보 -->
       <div class="settings-section">
         <h3>ℹ️ 앱 정보</h3>
         <div class="settings-item">
           <div class="settings-item-label">버전</div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.447</div>
+            <div style="color:var(--text3);font-size:13px;" id="appVersionDisplay">v1.448</div>
             <button class="btn-primary btn-sm" onclick="forceUpdateApp()" style="padding:4px 8px; font-size:11px; width:auto; border-radius:4px;">업데이트</button>
           </div>
         </div>
