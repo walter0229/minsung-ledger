@@ -243,16 +243,20 @@ export function nextMonth() {
   renderHome();
 }
 
-function initSearchDates() {
+export function initSearchDates(force = false) {
   const elFrom = document.getElementById('searchFrom');
   const elTo = document.getElementById('searchTo');
   if (elFrom) {
-     const today = new Date();
-     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-     elFrom.value = firstDay.toISOString().split('T')[0];
-     if(elTo) elTo.value = today.toISOString().split('T')[0];
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const firstDayStr = `${y}-${m}-01`;
+    const todayStrVal = `${y}-${m}-${String(today.getDate()).padStart(2, '0')}`;
+    if (force || !elFrom.value) elFrom.value = firstDayStr;
+    if (elTo && (force || !elTo.value)) elTo.value = todayStrVal;
   }
 }
+window.initSearchDates = initSearchDates;
 
 export async function forceUpdateApp() {
   if (navigator.serviceWorker) {

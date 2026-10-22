@@ -23,6 +23,6 @@ start /b npx -y serve . -p 3000
 timeout /t 2 /nobreak > nul
 
 :: 3. 서버 준비 완료 후 브라우저 열기
-start http://127.0.0.1:3000/index.html?v=1.445
+start http://127.0.0.1:3000/index.html?v=1.447
 
 pause

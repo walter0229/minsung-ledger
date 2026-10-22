@@ -112,7 +112,10 @@ export function showPage(name) {
   if (name === 'home' && window.renderHome) window.renderHome();
   if (name === 'calendar' && window.renderCalendar) window.renderCalendar();
   if (name === 'stats' && window.renderStats) window.renderStats();
-  if (name === 'report' && window.renderReport) window.renderReport();
+  if (name === 'report') {
+    if (window.initSearchDates) window.initSearchDates();
+    if (window.renderReport) window.renderReport();
+  }
   if (name === 'accounts' && window.renderAccountsList) window.renderAccountsList();
   if (name === 'settings') {
     if (window.renderSettings) window.renderSettings();

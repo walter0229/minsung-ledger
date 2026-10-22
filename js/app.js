@@ -194,7 +194,7 @@ const INCOME_CATEGORIES = [
 // Gemini 모델
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
-const APP_VERSION = '1.446';
+const APP_VERSION = '1.447';
 
 
 // =============================================
@@ -1160,7 +1160,10 @@ function showPage(name) {
   if (name === 'home' && window.renderHome) window.renderHome();
   if (name === 'calendar' && window.renderCalendar) window.renderCalendar();
   if (name === 'stats' && window.renderStats) window.renderStats();
-  if (name === 'report' && window.renderReport) window.renderReport();
+  if (name === 'report') {
+    if (window.initSearchDates) window.initSearchDates();
+    if (window.renderReport) window.renderReport();
+  }
   if (name === 'accounts' && window.renderAccountsList) window.renderAccountsList();
   if (name === 'settings') {
     if (window.renderSettings) window.renderSettings();
@@ -2229,10 +2232,41 @@ function doSearch() {
   }
 
   const defaultCur = state.accounts[0]?.currency || 'VND';
-  const total = results.reduce((s, t) => s + (t.type === 'expense' ? -Number(t.amount) : Number(t.amount)), 0);
 
-  el.innerHTML = `<div style="font-size:12px;color:var(--text2);margin:8px 0;padding:8px 0;border-bottom:1px solid var(--border);">
-    검색 결과: ${results.length}건 / 합계: <span style="font-weight:700;color:${total>=0?'var(--income)':'var(--expense)'}">${fmtMoney(total, defaultCur)}</span>
+  // 통화별 분리 집계 (수입: +, 지출: -, 계좌간 단순 이체는 순합계 제외)
+  const totalsByCur = {};
+  results.forEach(t => {
+    if (t.type === 'transfer') return;
+    const acc = findAccount(t.accountId || t.fromAccountId);
+    const cur = acc?.currency || defaultCur;
+    if (totalsByCur[cur] === undefined) totalsByCur[cur] = 0;
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'expense') {
+      totalsByCur[cur] -= amt;
+    } else if (t.type === 'income') {
+      totalsByCur[cur] += amt;
+    }
+  });
+
+  const curKeys = Object.keys(totalsByCur);
+  let totalHtml = '';
+  if (curKeys.length === 0) {
+    totalHtml = `<span style="font-weight:700;color:var(--text2);">${fmtMoney(0, defaultCur)}</span>`;
+  } else {
+    // 통화 정렬: VND 우선, KRW 차순, USD 차순, 그 외
+    const orderMap = { 'VND': 1, 'KRW': 2, 'USD': 3, 'EUR': 4 };
+    curKeys.sort((a, b) => (orderMap[a] || 99) - (orderMap[b] || 99) || a.localeCompare(b));
+
+    totalHtml = curKeys.map(cur => {
+      const tot = totalsByCur[cur];
+      const color = tot > 0 ? 'var(--income)' : (tot < 0 ? 'var(--expense)' : 'var(--text2)');
+      const signPrefix = tot > 0 ? '+' : '';
+      return `<span style="font-weight:700;color:${color};white-space:nowrap;">${signPrefix}${fmtMoney(tot, cur)}</span>`;
+    }).join(' <span style="color:var(--text3);margin:0 4px;font-weight:normal;">|</span> ');
+  }
+
+  el.innerHTML = `<div style="font-size:12px;color:var(--text2);margin:8px 0;padding:8px 0;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:4px;">
+    <span>검색 결과: <strong>${results.length}</strong>건 / 합계:</span> ${totalHtml}
   </div>` + results.map(t => {
     const sign = t.type === 'income' ? '<span class="money-symbol">+</span>' : t.type === 'transfer' ? '<span class="money-symbol">↔</span>' : '';
     const acc = findAccount(t.accountId || t.fromAccountId);
@@ -3817,16 +3851,20 @@ function nextMonth() {
   renderHome();
 }
 
-function initSearchDates() {
+function initSearchDates(force = false) {
   const elFrom = document.getElementById('searchFrom');
   const elTo = document.getElementById('searchTo');
   if (elFrom) {
-     const today = new Date();
-     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-     elFrom.value = firstDay.toISOString().split('T')[0];
-     if(elTo) elTo.value = today.toISOString().split('T')[0];
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const firstDayStr = `${y}-${m}-01`;
+    const todayStrVal = `${y}-${m}-${String(today.getDate()).padStart(2, '0')}`;
+    if (force || !elFrom.value) elFrom.value = firstDayStr;
+    if (elTo && (force || !elTo.value)) elTo.value = todayStrVal;
   }
 }
+window.initSearchDates = initSearchDates;
 
 async function forceUpdateApp() {
   if (navigator.serviceWorker) {
